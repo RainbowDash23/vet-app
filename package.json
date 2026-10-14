@@ -1,0 +1,14 @@
+{
+  "name": "vet-app",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Sistema de gestión veterinaria con historia clínica vinculada a llavero NFC",
+  "scripts": {
+    "dev:api": "pnpm --filter @vet-app/api start:dev",
+    "build:api": "pnpm --filter @vet-app/api build",
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down",
+    "prisma:generate": "pnpm --filter @vet-app/api prisma:generate"
+  },
+  "packageManager": "pnpm@11.15.1"
+}
