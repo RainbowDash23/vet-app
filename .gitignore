@@ -7,7 +7,7 @@ dist/
 build/
 out/
 *.tsbuildinfo
-
+docs/
 # Environment & credentials
 .env
 .env.local
