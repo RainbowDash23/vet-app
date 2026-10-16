@@ -7,20 +7,236 @@ generator client {
   provider = "prisma-client-js"
 }
 
-// Modelos preliminares para la conexión relacional
 enum Role {
   ADMIN
-  RECEPCION
-  VETERINARIO
+  VET
+  RECEPTION
+}
+
+enum PetSpecies {
+  CANINE
+  FELINE
+  AVIAN
+  EQUINE
+  RODENT
+  REPTILE
+  OTHER
+}
+
+enum PetSex {
+  MALE
+  FEMALE
+  UNKNOWN
+}
+
+enum TagStatus {
+  ACTIVE
+  INACTIVE
+  LOST
+  DAMAGED
+}
+
+enum VisitStatus {
+  PENDING
+  SCHEDULED
+  CANCELLED
+}
+
+enum AccessAction {
+  NFC_SCAN
+  MANUAL_LOOKUP
+  HISTORY_VIEW
+}
+
+model Clinic {
+  id        String    @id @default(uuid())
+  name      String
+  code      String    @unique
+  phone     String?
+  email     String?
+  address   String?
+  isActive  Boolean   @default(true)
+  deletedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  users  User[]
+  visits Visit[]
+
+  @@map("clinics")
 }
 
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  password  String
-  role      Role     @default(RECEPCION)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id            String    @id @default(uuid())
+  email         String    @unique
+  password      String
+  name          String
+  role          Role      @default(RECEPTION)
+  clinicId      String
+  licenseNumber String?
+  phone         String?
+  isActive      Boolean   @default(true)
+  deletedAt     DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
+  clinic       Clinic        @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  visits       Visit[]       @relation("VetVisits")
+  accessLogs   AccessLog[]
+  vaccinations Vaccination[]
+  attachments  Attachment[]
+
+  @@index([clinicId])
   @@map("users")
+}
+
+model Owner {
+  id         String    @id @default(uuid())
+  documentId String?   @unique
+  name       String
+  lastName   String
+  email      String?
+  phone      String
+  address    String?
+  deletedAt  DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  pets Pet[]
+
+  @@index([documentId])
+  @@index([phone])
+  @@index([lastName])
+  @@map("owners")
+}
+
+model Pet {
+  id        String     @id @default(uuid())
+  name      String
+  species   PetSpecies
+  breed     String?
+  sex       PetSex     @default(UNKNOWN)
+  birthDate DateTime?
+  notes     String?
+  ownerId   String
+  deletedAt DateTime?
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  owner        Owner         @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  tag          Tag?
+  visits       Visit[]
+  vaccinations Vaccination[]
+  attachments  Attachment[]
+  accessLogs   AccessLog[]
+
+  @@index([ownerId])
+  @@index([name])
+  @@map("pets")
+}
+
+model Tag {
+  id         String    @id @default(uuid())
+  uid        String    @unique
+  publicCode String    @unique @default(uuid())
+  status     TagStatus @default(ACTIVE)
+  petId      String?   @unique
+  deletedAt  DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  pet Pet? @relation(fields: [petId], references: [id], onDelete: SetNull)
+
+  @@index([uid])
+  @@index([publicCode])
+  @@map("tags")
+}
+
+model Visit {
+  id                 String      @id @default(uuid())
+  clinicId           String
+  vetId              String
+  petId              String
+  reason             String
+  notes              String?
+  diagnosis          String?
+  treatment          String?
+  weight             Float?
+  scheduledDate      DateTime
+  status             VisitStatus @default(PENDING)
+  cancellationReason String?
+  deletedAt          DateTime?
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+
+  clinic       Clinic       @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  veterinarian User         @relation("VetVisits", fields: [vetId], references: [id], onDelete: Restrict)
+  pet          Pet          @relation(fields: [petId], references: [id], onDelete: Restrict)
+  attachments  Attachment[]
+
+  @@index([clinicId, scheduledDate])
+  @@index([petId])
+  @@index([vetId])
+  @@map("visits")
+}
+
+model Vaccination {
+  id          String    @id @default(uuid())
+  petId       String
+  vetId       String?
+  vaccineName String
+  batchNumber String?
+  appliedAt   DateTime  @default(now())
+  nextDueDate DateTime?
+  notes       String?
+  deletedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  pet          Pet   @relation(fields: [petId], references: [id], onDelete: Cascade)
+  veterinarian User? @relation(fields: [vetId], references: [id], onDelete: SetNull)
+
+  @@index([petId])
+  @@index([nextDueDate])
+  @@map("vaccinations")
+}
+
+model Attachment {
+  id           String    @id @default(uuid())
+  filename     String
+  storagePath  String
+  mimeType     String
+  sizeBytes    Int
+  description  String?
+  uploadedById String
+  petId        String?
+  visitId      String?
+  deletedAt    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  uploadedBy User   @relation(fields: [uploadedById], references: [id], onDelete: Restrict)
+  pet        Pet?   @relation(fields: [petId], references: [id], onDelete: Cascade)
+  visit      Visit? @relation(fields: [visitId], references: [id], onDelete: Cascade)
+
+  @@index([petId])
+  @@index([visitId])
+  @@map("attachments")
+}
+
+model AccessLog {
+  id        String       @id @default(uuid())
+  userId    String
+  petId     String
+  action    AccessAction @default(NFC_SCAN)
+  ipAddress String?
+  userAgent String?
+  timestamp DateTime     @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+  pet  Pet  @relation(fields: [petId], references: [id], onDelete: Cascade)
+
+  @@index([petId, timestamp])
+  @@index([userId])
+  @@map("access_logs")
 }
