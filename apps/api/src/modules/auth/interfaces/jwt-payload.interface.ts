@@ -5,6 +5,9 @@ export interface JwtPayload {
   email: string;
   role: Role;
   clinicId: string;
+  jti: string;
+  iat?: number;
+  exp?: number;
 }
 
 export interface AuthenticatedUser {
@@ -12,4 +15,6 @@ export interface AuthenticatedUser {
   email: string;
   role: Role;
   clinicId: string;
+  jti?: string;
+  exp?: number;
 }

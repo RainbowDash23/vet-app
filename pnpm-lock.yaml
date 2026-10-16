@@ -28,6 +28,9 @@ importers:
       '@prisma/client':
         specifier: ^6.4.1
         version: 6.19.3(prisma@6.19.3(typescript@5.9.3))(typescript@5.9.3)
+      '@vet-app/shared-types':
+        specifier: workspace:*
+        version: link:../../packages/shared-types
       bcryptjs:
         specifier: ^3.0.3
         version: 3.0.3

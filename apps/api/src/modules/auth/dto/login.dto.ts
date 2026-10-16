@@ -1,6 +1,7 @@
 import { IsEmail, IsNotEmpty, IsString, MinLength } from 'class-validator';
+import { LoginRequestDto } from '@vet-app/shared-types';
 
-export class LoginDto {
+export class LoginDto implements LoginRequestDto {
   @IsEmail({}, { message: 'El correo electrónico debe ser una dirección válida' })
   @IsNotEmpty({ message: 'El correo electrónico es requerido' })
   email!: string;

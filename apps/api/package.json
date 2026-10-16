@@ -20,6 +20,7 @@
     "@nestjs/jwt": "^12.0.3",
     "@nestjs/platform-express": "^11.0.10",
     "@prisma/client": "^6.4.1",
+    "@vet-app/shared-types": "workspace:*",
     "bcryptjs": "^3.0.3",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",

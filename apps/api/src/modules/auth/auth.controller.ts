@@ -8,10 +8,12 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { Role } from '@prisma/client';
-import { AuthService, LoginResponse } from './auth.service';
+import { AuthService, LoginResponse, LogoutResponse } from './auth.service';
 import { CurrentClinicId, CurrentUser, CurrentUserId } from './decorators/current-user.decorator';
 import { Roles } from './decorators/roles.decorator';
 import { LoginDto } from './dto/login.dto';
+import { LogoutDto } from './dto/logout.dto';
+import { RefreshDto } from './dto/refresh.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
 import { AuthenticatedUser } from './interfaces/jwt-payload.interface';
@@ -21,13 +23,43 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   /**
-   * Endpoint de autenticación único (sin registro público).
-   * Valida credenciales contra la base de datos y retorna el JWT firmado.
+   * Endpoint de autenticación único (sin registro público) (RF-1, RF-2).
+   * Valida credenciales contra la base de datos y retorna el par de tokens firmado.
    */
   @Post('login')
   @HttpCode(HttpStatus.OK)
   async login(@Body() loginDto: LoginDto): Promise<LoginResponse> {
     return this.authService.login(loginDto);
+  }
+
+  /**
+   * Endpoint de renovación de sesión con rotación atómica de Refresh Token (RF-6).
+   * Invalida el token anterior y entrega un nuevo par de credenciales vigentes.
+   */
+  @Post('refresh')
+  @HttpCode(HttpStatus.OK)
+  async refresh(@Body() refreshDto: RefreshDto): Promise<LoginResponse> {
+    return this.authService.refreshTokens(refreshDto);
+  }
+
+  /**
+   * Endpoint de cierre de sesión y revocación en base de datos con denylist de JTI (RF-4).
+   * Protegido por JwtAuthGuard. Extrae userId y jti del usuario autenticado
+   * e invalida las credenciales activas.
+   */
+  @Post('logout')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  async logout(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() logoutDto?: LogoutDto,
+  ): Promise<LogoutResponse> {
+    return this.authService.logout(
+      user.userId,
+      user.jti || '',
+      user.exp,
+      logoutDto?.refreshToken,
+    );
   }
 
   /**
