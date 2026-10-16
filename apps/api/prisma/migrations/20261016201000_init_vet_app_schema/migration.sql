@@ -25,6 +25,12 @@ CREATE TYPE "GrantSource" AS ENUM ('NFC_TAP', 'OWNER_SIGNATURE', 'CLINIC_REFERRA
 -- CreateEnum
 CREATE TYPE "GrantScope" AS ENUM ('FULL_HISTORY', 'VACCINES_ONLY');
 
+-- CreateEnum
+CREATE TYPE "NotificationType" AS ENUM ('VISIT_REMINDER', 'VACCINE_ALERT');
+
+-- CreateEnum
+CREATE TYPE "NotificationStatus" AS ENUM ('PENDING', 'SENT', 'FAILED', 'CANCELLED');
+
 -- CreateTable
 CREATE TABLE "clinics" (
     "id" TEXT NOT NULL,
@@ -166,6 +172,7 @@ CREATE TABLE "visits" (
     "temperature" DOUBLE PRECISION,
     "heartRate" INTEGER,
     "respiratoryRate" INTEGER,
+    "capillaryRefillTime" INTEGER,
     "scheduledDate" TIMESTAMP(3) NOT NULL,
     "durationMinutes" INTEGER NOT NULL DEFAULT 30,
     "status" "VisitStatus" NOT NULL DEFAULT 'PENDING',
@@ -223,6 +230,24 @@ CREATE TABLE "attachments" (
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "attachments_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "notifications" (
+    "id" TEXT NOT NULL,
+    "idempotencyKey" TEXT NOT NULL,
+    "type" "NotificationType" NOT NULL,
+    "entityId" TEXT NOT NULL,
+    "recipient" TEXT NOT NULL,
+    "targetDate" TIMESTAMP(3) NOT NULL,
+    "status" "NotificationStatus" NOT NULL DEFAULT 'PENDING',
+    "retryCount" INTEGER NOT NULL DEFAULT 0,
+    "errorMessage" TEXT,
+    "sentAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "notifications_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateIndex
@@ -308,6 +333,12 @@ CREATE INDEX "attachments_petId_idx" ON "attachments"("petId");
 
 -- CreateIndex
 CREATE INDEX "attachments_visitId_idx" ON "attachments"("visitId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "notifications_idempotencyKey_key" ON "notifications"("idempotencyKey");
+
+-- CreateIndex
+CREATE INDEX "notifications_status_targetDate_idx" ON "notifications"("status", "targetDate");
 
 -- AddForeignKey
 ALTER TABLE "users" ADD CONSTRAINT "users_clinicId_fkey" FOREIGN KEY ("clinicId") REFERENCES "clinics"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -397,3 +428,14 @@ WHERE "documentId" IS NOT NULL AND "deletedAt" IS NULL;
 CREATE UNIQUE INDEX "unique_active_tag_uid" 
 ON "tags" ("uid") 
 WHERE "deletedAt" IS NULL;
+
+-- 6. Optimización de agenda: Prevención algorítmica de solapamiento en visitas activas (RF-40)
+CREATE INDEX "idx_visits_vet_active_schedule" 
+ON "visits" ("vetId", "scheduledDate") 
+WHERE "status" IN ('PENDING', 'SCHEDULED') AND "deletedAt" IS NULL;
+
+-- 7. Despacho programado: Notificaciones pendientes para procesamiento asíncrono e idempotente (RF-51, RF-52, RF-54)
+CREATE INDEX "idx_pending_notifications" 
+ON "notifications" ("targetDate", "retryCount") 
+WHERE "status" = 'PENDING';
+
