@@ -1,0 +1,84 @@
+:root {
+  /* ==========================================================================
+     Sistema de Diseño VetApp - Variables CSS Globales
+     ========================================================================== */
+
+  /* --- Colores de Fondo y Superficie --- */
+  --color-bg-app: #090d16;
+  --color-bg-sidebar: #0f172a;
+  --color-bg-card: #131c31;
+  --color-bg-input: #1a243b;
+  --color-bg-hover: #1e2945;
+  --color-bg-active: #243254;
+
+  /* --- Bordes y Separadores --- */
+  --color-border: #232f48;
+  --color-border-focus: #14b8a6;
+  --color-border-error: #f43f5e;
+
+  /* --- Tipografía y Contenido --- */
+  --color-text-primary: #f8fafc;
+  --color-text-secondary: #94a3b8;
+  --color-text-muted: #64748b;
+  --color-text-disabled: #475569;
+
+  /* --- Acentos Clínicos (Teal / Verde Médico) --- */
+  --color-primary: #14b8a6;
+  --color-primary-hover: #0d9488;
+  --color-primary-light: rgba(20, 184, 166, 0.15);
+  --color-primary-foreground: #ffffff;
+
+  /* --- Estados y Alertas --- */
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-error: #f43f5e;
+  --color-info: #38bdf8;
+
+  /* --- Espaciado Dimensional --- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  /* --- Tipografía --- */
+  --font-family-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-family-mono: 'JetBrains Mono', 'Fira Code', Menlo, Monaco, Consolas, monospace;
+
+  --font-size-xs: 0.75rem;    /* 12px */
+  --font-size-sm: 0.875rem;   /* 14px */
+  --font-size-base: 1rem;     /* 16px */
+  --font-size-lg: 1.125rem;   /* 18px */
+  --font-size-xl: 1.25rem;    /* 20px */
+  --font-size-2xl: 1.5rem;    /* 24px */
+  --font-size-3xl: 1.875rem;  /* 30px */
+
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  --line-height-tight: 1.25;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.75;
+
+  /* --- Bordes Redondeados --- */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 9999px;
+
+  /* --- Sombras --- */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -2px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.6), 0 4px 6px -4px rgba(0, 0, 0, 0.6);
+
+  /* --- Transiciones --- */
+  --transition-fast: 150ms ease;
+  --transition-normal: 250ms ease;
+}

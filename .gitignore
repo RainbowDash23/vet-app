@@ -11,12 +11,17 @@ out/
 # Documentation & Specs
 docs/
 specs/
-
+firmware/
 # Environment & credentials
 .env
 .env.local
 .env.*.local
 !.env.example
+config.py
+apps/firmware/config.py
+firmware/config.py
+!config.example.py
+!apps/firmware/config.example.py
 
 # Database / Docker volumes
 *.db
