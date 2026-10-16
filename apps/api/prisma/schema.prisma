@@ -29,6 +29,13 @@ enum PetSex {
   UNKNOWN
 }
 
+enum ReproductiveStatus {
+  INTACT
+  NEUTERED
+  SPAYED
+  UNKNOWN
+}
+
 enum TagStatus {
   ACTIVE
   INACTIVE
@@ -46,6 +53,19 @@ enum AccessAction {
   NFC_SCAN
   MANUAL_LOOKUP
   HISTORY_VIEW
+  EMERGENCY_SCAN
+}
+
+enum GrantSource {
+  NFC_TAP
+  OWNER_SIGNATURE
+  CLINIC_REFERRAL
+  EMERGENCY_OVERRIDE
+}
+
+enum GrantScope {
+  FULL_HISTORY
+  VACCINES_ONLY
 }
 
 model Clinic {
@@ -60,15 +80,18 @@ model Clinic {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
-  users  User[]
-  visits Visit[]
+  users        User[]
+  visits       Visit[]
+  accessGrants AccessGrant[]
+  accessLogs   AccessLog[]
+  vaccinations Vaccination[]
 
   @@map("clinics")
 }
 
 model User {
   id            String    @id @default(uuid())
-  email         String    @unique
+  email         String
   password      String
   name          String
   role          Role      @default(RECEPTION)
@@ -80,19 +103,37 @@ model User {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  clinic       Clinic        @relation(fields: [clinicId], references: [id], onDelete: Restrict)
-  visits       Visit[]       @relation("VetVisits")
-  accessLogs   AccessLog[]
-  vaccinations Vaccination[]
-  attachments  Attachment[]
+  clinic        Clinic         @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  visits        Visit[]        @relation("VetVisits")
+  accessLogs    AccessLog[]
+  vaccinations  Vaccination[]
+  attachments   Attachment[]
+  refreshTokens RefreshToken[]
+  visitNotes    VisitNote[]
 
   @@index([clinicId])
+  @@index([email])
   @@map("users")
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid())
+  userId    String
+  tokenHash String
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([tokenHash])
+  @@map("refresh_tokens")
 }
 
 model Owner {
   id         String    @id @default(uuid())
-  documentId String?   @unique
+  documentId String?
   name       String
   lastName   String
   email      String?
@@ -111,24 +152,28 @@ model Owner {
 }
 
 model Pet {
-  id        String     @id @default(uuid())
-  name      String
-  species   PetSpecies
-  breed     String?
-  sex       PetSex     @default(UNKNOWN)
-  birthDate DateTime?
-  notes     String?
-  ownerId   String
-  deletedAt DateTime?
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
+  id                     String             @id @default(uuid())
+  name                   String
+  species                PetSpecies
+  breed                  String?
+  sex                    PetSex             @default(UNKNOWN)
+  birthDate              DateTime?
+  isApproximateBirthDate Boolean            @default(false)
+  color                  String?
+  reproductiveStatus     ReproductiveStatus @default(UNKNOWN)
+  notes                  String?
+  ownerId                String
+  deletedAt              DateTime?
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
 
   owner        Owner         @relation(fields: [ownerId], references: [id], onDelete: Restrict)
-  tag          Tag?
+  tags         Tag[]
   visits       Visit[]
   vaccinations Vaccination[]
   attachments  Attachment[]
   accessLogs   AccessLog[]
+  accessGrants AccessGrant[]
 
   @@index([ownerId])
   @@index([name])
@@ -137,10 +182,10 @@ model Pet {
 
 model Tag {
   id         String    @id @default(uuid())
-  uid        String    @unique
+  uid        String
   publicCode String    @unique @default(uuid())
   status     TagStatus @default(ACTIVE)
-  petId      String?   @unique
+  petId      String?
   deletedAt  DateTime?
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
@@ -149,7 +194,48 @@ model Tag {
 
   @@index([uid])
   @@index([publicCode])
+  @@index([petId])
   @@map("tags")
+}
+
+model AccessGrant {
+  id        String      @id @default(uuid())
+  petId     String
+  clinicId  String
+  source    GrantSource @default(NFC_TAP)
+  scope     GrantScope  @default(FULL_HISTORY)
+  grantedAt DateTime    @default(now())
+  expiresAt DateTime
+  revokedAt DateTime?
+  notes     String?
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  pet    Pet    @relation(fields: [petId], references: [id], onDelete: Cascade)
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+
+  @@index([petId, clinicId, expiresAt])
+  @@map("access_grants")
+}
+
+model AccessLog {
+  id        String       @id @default(uuid())
+  petId     String
+  clinicId  String?
+  userId    String?
+  action    AccessAction @default(NFC_SCAN)
+  ipAddress String?
+  userAgent String?
+  timestamp DateTime     @default(now())
+
+  pet    Pet     @relation(fields: [petId], references: [id], onDelete: Cascade)
+  clinic Clinic? @relation(fields: [clinicId], references: [id], onDelete: SetNull)
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([petId, timestamp])
+  @@index([clinicId, timestamp])
+  @@index([userId])
+  @@map("access_logs")
 }
 
 model Visit {
@@ -162,9 +248,14 @@ model Visit {
   diagnosis          String?
   treatment          String?
   weight             Float?
+  temperature        Float?
+  heartRate          Int?
+  respiratoryRate    Int?
   scheduledDate      DateTime
+  durationMinutes    Int         @default(30)
   status             VisitStatus @default(PENDING)
   cancellationReason String?
+  closedAt           DateTime?
   deletedAt          DateTime?
   createdAt          DateTime    @default(now())
   updatedAt          DateTime    @updatedAt
@@ -173,6 +264,7 @@ model Visit {
   veterinarian User         @relation("VetVisits", fields: [vetId], references: [id], onDelete: Restrict)
   pet          Pet          @relation(fields: [petId], references: [id], onDelete: Restrict)
   attachments  Attachment[]
+  notesHistory VisitNote[]
 
   @@index([clinicId, scheduledDate])
   @@index([petId])
@@ -180,9 +272,25 @@ model Visit {
   @@map("visits")
 }
 
+model VisitNote {
+  id        String   @id @default(uuid())
+  visitId   String
+  vetId     String
+  content   String
+  createdAt DateTime @default(now())
+
+  visit        Visit @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  veterinarian User  @relation(fields: [vetId], references: [id], onDelete: Restrict)
+
+  @@index([visitId])
+  @@index([vetId])
+  @@map("visit_notes")
+}
+
 model Vaccination {
   id          String    @id @default(uuid())
   petId       String
+  clinicId    String?
   vetId       String?
   vaccineName String
   batchNumber String?
@@ -193,11 +301,13 @@ model Vaccination {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  pet          Pet   @relation(fields: [petId], references: [id], onDelete: Cascade)
-  veterinarian User? @relation(fields: [vetId], references: [id], onDelete: SetNull)
+  pet          Pet     @relation(fields: [petId], references: [id], onDelete: Cascade)
+  clinic       Clinic? @relation(fields: [clinicId], references: [id], onDelete: SetNull)
+  veterinarian User?   @relation(fields: [vetId], references: [id], onDelete: SetNull)
 
   @@index([petId])
   @@index([nextDueDate])
+  @@index([clinicId])
   @@map("vaccinations")
 }
 
@@ -222,21 +332,4 @@ model Attachment {
   @@index([petId])
   @@index([visitId])
   @@map("attachments")
-}
-
-model AccessLog {
-  id        String       @id @default(uuid())
-  userId    String
-  petId     String
-  action    AccessAction @default(NFC_SCAN)
-  ipAddress String?
-  userAgent String?
-  timestamp DateTime     @default(now())
-
-  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
-  pet  Pet  @relation(fields: [petId], references: [id], onDelete: Cascade)
-
-  @@index([petId, timestamp])
-  @@index([userId])
-  @@map("access_logs")
 }
