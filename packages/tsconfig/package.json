@@ -1,0 +1,15 @@
+{
+  "name": "@vet-app/tsconfig",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Configuraciones base de TypeScript estricto para el monorepo vet-app",
+  "files": [
+    "base.json",
+    "nest.json",
+    "react.json"
+  ],
+  "scripts": {
+    "test": "node --test test/tsconfig.test.mjs",
+    "build": "node --test test/tsconfig.test.mjs"
+  }
+}
