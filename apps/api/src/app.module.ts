@@ -11,6 +11,9 @@ import { PetsModule } from './modules/pets/pets.module';
 import { TagsModule } from './modules/tags/tags.module';
 import { VisitsModule } from './modules/visits/visits.module';
 import { AuditModule } from './modules/audit/audit.module';
+import { EmergencyModule } from './modules/emergency/emergency.module';
+import { VaccinationsModule } from './modules/vaccinations/vaccinations.module';
+import { AttachmentsModule } from './modules/attachments/attachments.module';
 
 @Module({
   imports: [
@@ -28,6 +31,9 @@ import { AuditModule } from './modules/audit/audit.module';
     TagsModule,
     VisitsModule,
     AuditModule,
+    EmergencyModule,
+    VaccinationsModule,
+    AttachmentsModule,
   ],
 })
 export class AppModule {}
