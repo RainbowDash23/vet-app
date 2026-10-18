@@ -2,6 +2,7 @@ import {
   ArgumentsHost,
   Catch,
   ExceptionFilter,
+  HttpException,
   HttpStatus,
   Logger,
 } from '@nestjs/common';
@@ -17,8 +18,39 @@ export class PrismaExceptionFilter implements ExceptionFilter {
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest<Request>();
 
+    if (exception instanceof HttpException) {
+      const statusCode = exception.getStatus();
+      const res = exception.getResponse();
+      let message: string | string[] = exception.message;
+      let error = exception.name;
+      let extraData: Record<string, any> = {};
+
+      if (typeof res === 'string') {
+        message = res;
+      } else if (typeof res === 'object' && res !== null) {
+        const resObj = res as Record<string, any>;
+        if (resObj.message) {
+          message = resObj.message;
+        }
+        if (resObj.error) {
+          error = resObj.error;
+        }
+        extraData = resObj;
+      }
+
+      response.status(statusCode).json({
+        statusCode,
+        message,
+        error,
+        timestamp: new Date().toISOString(),
+        path: request?.url || '',
+        ...extraData,
+      });
+      return;
+    }
+
     let statusCode = HttpStatus.INTERNAL_SERVER_ERROR;
-    let message = 'Ocurrió un error interno en el servidor.';
+    let message: string | string[] = 'Ocurrió un error interno en el servidor.';
     let error = 'Internal Server Error';
 
     if (exception instanceof Prisma.PrismaClientKnownRequestError) {
