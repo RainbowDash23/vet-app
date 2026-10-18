@@ -25,6 +25,11 @@ export interface AttendVisitDto {
   diagnosis?: string;
   treatment?: string;
   notes?: string;
+  weight?: number;
+  temperature?: number;
+  heartRate?: number;
+  respiratoryRate?: number;
+  capillaryRefillTime?: number;
 }
 
 export interface CloseVisitDto {

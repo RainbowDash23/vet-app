@@ -1,12 +1,31 @@
+import type { HardwareStatus } from '@vet-app/shared-types';
+
 /**
- * Interfaz que define el contrato de cualquier transceptor o lector de tags/llaveros NFC.
- * Permite desacoplar el hardware real (puerto serial / USB MicroPython) de la UI.
+ * Interfaz unificada para lectores de tags NFC (hardware serial real o simuladores de prueba).
+ * Conforme a RF-27, RNF-4, RNF-5.
  */
-export interface TagReader {
-  /**
-   * Registra un callback que se invocará cada vez que se detecte un tag NFC.
-   * @param callback Función receptora del UID hexadecimal leído.
-   * @returns Función de desuscripción para limpieza de listeners.
-   */
+export interface ITagReader {
+  start(): Promise<void> | void;
+  stop(): Promise<void> | void;
+  onTagDetected(callback: (uid: string) => void): () => void;
+  simulateTag?(uid: string, delayMs?: number): Promise<void> | void;
+  getStatus?(): HardwareStatus;
+  isActive(): boolean;
+}
+
+/**
+ * Función de callback para suscripción a eventos de detección de tag NFC.
+ */
+export type TagCallback = (uid: string) => void;
+
+/**
+ * Función de callback para suscripción a cambios de estado del hardware.
+ */
+export type HardwareStatusCallback = (status: HardwareStatus) => void;
+
+/**
+ * Interfaz de compatibilidad hacia atrás con componentes UI previos.
+ */
+export interface TagReader extends ITagReader {
   onTag(callback: (uid: string) => void): () => void;
 }

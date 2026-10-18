@@ -1,4 +1,4 @@
-import type { ElectronAPI } from '../../electron/preload';
+import type { ElectronAPI } from '@vet-app/shared-types';
 
 declare global {
   interface Window {

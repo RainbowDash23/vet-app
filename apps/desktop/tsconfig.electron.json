@@ -9,6 +9,7 @@
     "noImplicitAny": true,
     "strictNullChecks": true,
     "esModuleInterop": true,
+    "rewriteRelativeImportExtensions": true,
     "sourceMap": true
   },
   "include": ["electron"]

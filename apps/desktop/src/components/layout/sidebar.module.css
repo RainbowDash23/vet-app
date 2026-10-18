@@ -1,3 +1,7 @@
+/* ==========================================================================
+   Sidebar - Estilos Puros con CSS Modules y Variables CSS (RNF-3)
+   ========================================================================== */
+
 .sidebar {
   width: 260px;
   min-width: 260px;
@@ -8,13 +12,14 @@
   justify-content: space-between;
   padding: var(--space-6) var(--space-4);
   height: 100vh;
+  box-sizing: border-box;
 }
 
 .brand {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  margin-bottom: var(--space-8);
+  margin-bottom: var(--space-6);
   padding: 0 var(--space-2);
 }
 
@@ -48,6 +53,17 @@
   margin-left: auto;
 }
 
+.roleIndicator {
+  font-size: 11px;
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0 var(--space-2) var(--space-3) var(--space-2);
+  border-bottom: 1px solid var(--color-border-subtle);
+  margin-bottom: var(--space-3);
+}
+
 .nav {
   display: flex;
   flex-direction: column;
@@ -63,14 +79,23 @@
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
   color: var(--color-text-secondary);
+  background: transparent;
+  border: 1px solid transparent;
   transition: all var(--transition-fast);
   text-align: left;
   width: 100%;
+  cursor: pointer;
+  box-sizing: border-box;
 }
 
 .navItem:hover {
   background-color: var(--color-bg-hover);
   color: var(--color-text-primary);
+}
+
+.navItem:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 2px;
 }
 
 .navItemActive {
@@ -82,6 +107,9 @@
 
 .navIcon {
   font-size: var(--font-size-base);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .footer {
@@ -131,6 +159,7 @@
 .simulateButton {
   background-color: var(--color-primary);
   color: var(--color-primary-foreground);
+  border: none;
   border-radius: var(--radius-md);
   padding: var(--space-2);
   font-size: var(--font-size-xs);
@@ -138,8 +167,14 @@
   transition: background-color var(--transition-fast);
   text-align: center;
   width: 100%;
+  cursor: pointer;
 }
 
 .simulateButton:hover {
   background-color: var(--color-primary-hover);
+}
+
+.simulateButton:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 2px;
 }

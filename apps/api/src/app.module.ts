@@ -14,6 +14,7 @@ import { AuditModule } from './modules/audit/audit.module';
 import { EmergencyModule } from './modules/emergency/emergency.module';
 import { VaccinationsModule } from './modules/vaccinations/vaccinations.module';
 import { AttachmentsModule } from './modules/attachments/attachments.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { AttachmentsModule } from './modules/attachments/attachments.module';
     EmergencyModule,
     VaccinationsModule,
     AttachmentsModule,
+    NotificationsModule,
   ],
 })
 export class AppModule {}
