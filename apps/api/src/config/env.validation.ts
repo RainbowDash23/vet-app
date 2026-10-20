@@ -45,5 +45,15 @@ export function validateEnv(config: Record<string, unknown>): EnvironmentVariabl
     throw new Error(`[Config Error] Variables de entorno inválidas o faltantes:\n${errors.map((e) => Object.values(e.constraints ?? {}).join(', ')).join('\n')}`);
   }
 
+  if (
+    validatedConfig.NODE_ENV === Environment.Production &&
+    validatedConfig.JWT_SECRET &&
+    validatedConfig.JWT_SECRET.toLowerCase().includes('change_me')
+  ) {
+    throw new Error(
+      '[Config Error] JWT_SECRET no puede contener "change_me" en entorno de producción',
+    );
+  }
+
   return validatedConfig;
 }

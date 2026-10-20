@@ -79,8 +79,15 @@ export const SEED_USERS: ReadonlyArray<SeedUserData> = [
 export async function seedDatabase(
   client?: PrismaClient,
 ): Promise<{ clinics: Clinic[]; users: User[] }> {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(
+      'La siembra de datos de prueba está estrictamente deshabilitada en entorno de producción',
+    );
+  }
+
   const prisma = client ?? new PrismaClient();
-  const passwordHash = await bcrypt.hash(DEFAULT_SEED_PASSWORD, BCRYPT_ROUNDS);
+  const seedPassword = process.env.SEED_DEFAULT_PASSWORD || DEFAULT_SEED_PASSWORD;
+  const passwordHash = await bcrypt.hash(seedPassword, BCRYPT_ROUNDS);
 
   const clinicsMap = new Map<string, Clinic>();
   const createdClinics: Clinic[] = [];

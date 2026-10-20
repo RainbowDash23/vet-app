@@ -232,5 +232,69 @@ describe('T05 - Semilla de Base de Datos con Clínicas y Usuarios RBAC', () => {
         'El total de usuarios en persistencia debe ser exactamente 4',
       );
     });
+
+    it('debe negarse a correr en entorno de producción (NODE_ENV === "production")', async () => {
+      const prevEnv = process.env.NODE_ENV;
+      process.env.NODE_ENV = 'production';
+      try {
+        await assert.rejects(
+          async () => {
+            await seedDatabase();
+          },
+          (err: any) => {
+            assert.ok(err instanceof Error);
+            assert.ok(err.message.includes('producción'));
+            return true;
+          },
+        );
+      } finally {
+        process.env.NODE_ENV = prevEnv;
+      }
+    });
+
+    it('debe tomar la contraseña de la variable de entorno SEED_DEFAULT_PASSWORD si está configurada', async () => {
+      const customPassword = 'CustomSecureEnvPassword123!';
+      const prevEnvPass = process.env.SEED_DEFAULT_PASSWORD;
+      process.env.SEED_DEFAULT_PASSWORD = customPassword;
+
+      try {
+        const mockClinics = new Map<string, any>();
+        const mockUsers = new Map<string, any>();
+        const testPrisma: any = {
+          clinic: {
+            upsert: async ({ create }: any) => {
+              const clinic = { id: `clinic-${create.code}`, ...create };
+              mockClinics.set(create.code, clinic);
+              return clinic;
+            },
+          },
+          user: {
+            findFirst: async ({ where }: any) => mockUsers.get(where.email) ?? null,
+            create: async ({ data }: any) => {
+              const user = { id: `user-${data.email}`, ...data };
+              mockUsers.set(data.email, user);
+              return user;
+            },
+            update: async ({ where, data }: any) => {
+              const user = { id: where.id, ...data };
+              mockUsers.set(user.email, user);
+              return user;
+            },
+          },
+        };
+
+        const result = await seedDatabase(testPrisma);
+        const adminUser = result.users.find((u) => u.email === 'admin@vetapp.com');
+        assert.ok(adminUser);
+        const matches = await bcrypt.compare(customPassword, adminUser.password);
+        assert.strictEqual(matches, true, 'La contraseña hasheada debe coincidir con SEED_DEFAULT_PASSWORD');
+      } finally {
+        if (prevEnvPass !== undefined) {
+          process.env.SEED_DEFAULT_PASSWORD = prevEnvPass;
+        } else {
+          delete process.env.SEED_DEFAULT_PASSWORD;
+        }
+      }
+    });
   });
 });
