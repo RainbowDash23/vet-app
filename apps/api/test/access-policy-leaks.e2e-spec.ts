@@ -77,6 +77,10 @@ describe('E2E: Demostración de Fugas de Seguridad y Aislamiento Multi-Tenant (s
       updatedAt: new Date(),
     });
 
+    if (testContext.syncToPostgres) {
+      await testContext.syncToPostgres();
+    }
+
     // Login Veterinario de Clínica B
     const loginVetB = await request(app.getHttpServer())
       .post('/auth/login')
@@ -143,6 +147,10 @@ describe('E2E: Demostración de Fugas de Seguridad y Aislamiento Multi-Tenant (s
       userAgent: 'Mozilla/5.0 Clinica-A-Terminal',
       timestamp: new Date(),
     });
+
+    if (testContext.syncToPostgres) {
+      await testContext.syncToPostgres();
+    }
   });
 
   after(async () => {

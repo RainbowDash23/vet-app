@@ -153,7 +153,20 @@ export async function createInitialDb(): Promise<InMemoryDb> {
       phone: '+593991234567',
       email: 'carlos.mendoza@email.com',
       address: 'Calle Secreta 789',
+      createdByClinicId: CLINIC_A_ID,
       deletedAt: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    },
+  ];
+
+  const clinicOwners = [
+    {
+      id: 'clinic-owner-1111-4111-8111-111111111111',
+      clinicId: CLINIC_A_ID,
+      ownerId: OWNER_1_ID,
+      consentedAt: new Date(),
+      status: 'ACTIVE',
       createdAt: new Date(),
       updatedAt: new Date(),
     },
@@ -169,6 +182,7 @@ export async function createInitialDb(): Promise<InMemoryDb> {
       reproductiveStatus: 'INTACT',
       sex: 'MALE',
       ownerId: OWNER_1_ID,
+      createdByClinicId: CLINIC_A_ID,
       deletedAt: null,
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -201,7 +215,7 @@ export async function createInitialDb(): Promise<InMemoryDb> {
     visitNotes: [],
     attachments: [],
     vaccinations: [],
-    clinicOwners: [],
+    clinicOwners,
   };
 }
 
@@ -552,21 +566,222 @@ export function createMockPrismaService(db: InMemoryDb): any {
   return mockPrisma;
 }
 
+export async function syncInMemoryDbToPostgres(prisma: any, db: InMemoryDb): Promise<void> {
+  // Limpieza en cascada inversa respetando restricciones de integridad referencial
+  await prisma.attachment.deleteMany();
+  await prisma.vaccination.deleteMany();
+  await prisma.visitNote.deleteMany();
+  await prisma.visit.deleteMany();
+  await prisma.accessLog.deleteMany();
+  await prisma.accessGrant.deleteMany();
+  await prisma.tag.deleteMany();
+  await prisma.clinicOwner.deleteMany();
+  await prisma.pet.deleteMany();
+  await prisma.owner.deleteMany();
+  await prisma.refreshToken.deleteMany();
+  await prisma.user.deleteMany();
+  await prisma.clinic.deleteMany();
+
+  // 1. Clínicas
+  for (const c of db.clinics) {
+    await prisma.clinic.upsert({
+      where: { id: c.id },
+      create: {
+        id: c.id,
+        name: c.name,
+        code: c.code,
+        phone: c.phone,
+        email: c.email,
+        address: c.address,
+        isActive: c.isActive ?? true,
+        deletedAt: c.deletedAt,
+      },
+      update: {},
+    });
+  }
+
+  // 2. Usuarios
+  for (const u of db.users) {
+    await prisma.user.upsert({
+      where: { id: u.id },
+      create: {
+        id: u.id,
+        email: u.email,
+        password: u.password,
+        name: u.name,
+        role: u.role,
+        clinicId: u.clinicId,
+        licenseNumber: u.licenseNumber,
+        phone: u.phone,
+        isActive: u.isActive ?? true,
+        deletedAt: u.deletedAt,
+      },
+      update: {},
+    });
+  }
+
+  // 3. Dueños
+  for (const o of db.owners) {
+    await prisma.owner.upsert({
+      where: { id: o.id },
+      create: {
+        id: o.id,
+        documentId: o.documentId,
+        name: o.name,
+        lastName: o.lastName,
+        email: o.email,
+        phone: o.phone,
+        address: o.address,
+        createdByClinicId: o.createdByClinicId,
+        createdById: o.createdById,
+        deletedAt: o.deletedAt,
+      },
+      update: {},
+    });
+  }
+
+  // 4. Vínculos ClinicOwner
+  for (const co of db.clinicOwners) {
+    await prisma.clinicOwner.upsert({
+      where: { clinicId_ownerId: { clinicId: co.clinicId, ownerId: co.ownerId } },
+      create: {
+        id: co.id || crypto.randomUUID(),
+        clinicId: co.clinicId,
+        ownerId: co.ownerId,
+        consentedAt: co.consentedAt || new Date(),
+        status: co.status || 'ACTIVE',
+      },
+      update: {},
+    });
+  }
+
+  // 5. Mascotas
+  for (const p of db.pets) {
+    await prisma.pet.upsert({
+      where: { id: p.id },
+      create: {
+        id: p.id,
+        name: p.name,
+        species: p.species,
+        breed: p.breed,
+        birthDate: p.birthDate,
+        isApproximateBirthDate: p.isApproximateBirthDate ?? false,
+        color: p.color,
+        reproductiveStatus: p.reproductiveStatus,
+        sex: p.sex,
+        notes: p.notes,
+        ownerId: p.ownerId,
+        createdByClinicId: p.createdByClinicId,
+        createdById: p.createdById,
+        deletedAt: p.deletedAt,
+      },
+      update: {
+        notes: p.notes,
+      },
+    });
+  }
+
+  // 6. Tags
+  for (const t of db.tags) {
+    await prisma.tag.upsert({
+      where: { id: t.id },
+      create: {
+        id: t.id,
+        uid: t.uid,
+        publicCode: t.publicCode,
+        status: t.status,
+        petId: t.petId,
+        deletedAt: t.deletedAt,
+      },
+      update: {},
+    });
+  }
+
+  // 7. Visitas
+  for (const v of db.visits) {
+    await prisma.visit.upsert({
+      where: { id: v.id },
+      create: {
+        id: v.id,
+        clinicId: v.clinicId,
+        vetId: v.vetId,
+        petId: v.petId,
+        reason: v.reason,
+        notes: v.notes,
+        diagnosis: v.diagnosis,
+        treatment: v.treatment,
+        scheduledDate: v.scheduledDate,
+        durationMinutes: v.durationMinutes,
+        status: v.status,
+        deletedAt: v.deletedAt,
+        closedAt: v.closedAt,
+      },
+      update: {},
+    });
+  }
+
+  // 8. Adjuntos
+  for (const a of db.attachments) {
+    await prisma.attachment.upsert({
+      where: { id: a.id },
+      create: {
+        id: a.id,
+        filename: a.filename,
+        storagePath: a.storagePath,
+        mimeType: a.mimeType,
+        sizeBytes: a.sizeBytes,
+        description: a.description,
+        uploadedById: a.uploadedById,
+        petId: a.petId,
+        visitId: a.visitId,
+        deletedAt: a.deletedAt,
+      },
+      update: {},
+    });
+  }
+
+  // 9. Trazas de Auditoría
+  for (const l of db.accessLogs) {
+    await prisma.accessLog.upsert({
+      where: { id: l.id },
+      create: {
+        id: l.id,
+        petId: l.petId,
+        clinicId: l.clinicId,
+        userId: l.userId,
+        action: l.action,
+        ipAddress: l.ipAddress,
+        userAgent: l.userAgent,
+        timestamp: l.timestamp,
+      },
+      update: {},
+    });
+  }
+}
+
 export async function createTestApp(customDb?: InMemoryDb): Promise<{
   app: INestApplication;
   db: InMemoryDb;
   prisma: any;
+  syncToPostgres?: () => Promise<void>;
+  isRealDb: boolean;
 }> {
+  const isRealDb = process.env.USE_REAL_DB === 'true';
   const db = customDb || (await createInitialDb());
-  const mockPrisma = createMockPrismaService(db);
 
-  const moduleFixture: TestingModule = await Test.createTestingModule({
+  let moduleBuilder = Test.createTestingModule({
     imports: [AppModule],
-  })
-    .overrideProvider(PrismaService)
-    .useValue(mockPrisma)
-    .compile();
+  });
 
+  let mockPrisma: any = null;
+  if (!isRealDb) {
+    mockPrisma = createMockPrismaService(db);
+    moduleBuilder = moduleBuilder
+      .overrideProvider(PrismaService)
+      .useValue(mockPrisma);
+  }
+
+  const moduleFixture: TestingModule = await moduleBuilder.compile();
   const app = moduleFixture.createNestApplication();
 
   app.useGlobalPipes(
@@ -584,5 +799,17 @@ export async function createTestApp(customDb?: InMemoryDb): Promise<{
 
   await app.init();
 
-  return { app, db, prisma: mockPrisma };
+  const prismaInstance = isRealDb ? app.get(PrismaService) : mockPrisma;
+
+  const syncToPostgres = isRealDb
+    ? async () => {
+        await syncInMemoryDbToPostgres(prismaInstance, db);
+      }
+    : undefined;
+
+  if (isRealDb && syncToPostgres) {
+    await syncToPostgres();
+  }
+
+  return { app, db, prisma: prismaInstance, syncToPostgres, isRealDb };
 }
