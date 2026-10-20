@@ -385,6 +385,32 @@ describe('OwnersService & OwnersController (T12 / RF-14, RF-15, RF-16, RF-19)', 
       assert.strictEqual(result.phone, '+593994433221');
       assert.strictEqual(result.deletedAt, null);
     });
+
+    it('debe fallar si el cliente transaccional tx carece del modelo clinicOwner (falla en cerrado)', async () => {
+      const brokenPrisma: any = {
+        ...mockPrisma,
+        $transaction: async (fn: any) => {
+          const brokenTx = { owner: mockPrisma.owner }; // carece de clinicOwner
+          return fn(brokenTx);
+        },
+      };
+      const brokenService = new OwnersService(brokenPrisma);
+      const dto: CreateOwnerDto = {
+        documentId: '1104567899',
+        name: 'Carlos',
+        lastName: 'SinModelo',
+        phone: '+593994433221',
+      };
+      await assert.rejects(
+        async () => {
+          await brokenService.create(dto, validClinicId);
+        },
+        (err: any) => {
+          assert.ok(err instanceof TypeError || String(err).includes('clinicOwner'));
+          return true;
+        },
+      );
+    });
   });
 
   describe('b) Rechazo con HTTP 409 Conflict ante documento de identidad duplicado (RF-15)', () => {

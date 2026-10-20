@@ -39,7 +39,7 @@ export class OwnersService {
       throw new ConflictException('Documento de identidad ya registrado');
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const owner = await tx.owner.create({
         data: {
           documentId: createOwnerDto.documentId,
@@ -53,16 +53,14 @@ export class OwnersService {
         },
       });
 
-      if ((tx as any).clinicOwner) {
-        await (tx as any).clinicOwner.create({
-          data: {
-            clinicId,
-            ownerId: owner.id,
-            consentedAt: new Date(),
-            status: 'ACTIVE',
-          },
-        });
-      }
+      await tx.clinicOwner.create({
+        data: {
+          clinicId,
+          ownerId: owner.id,
+          consentedAt: new Date(),
+          status: 'ACTIVE',
+        },
+      });
 
       return owner;
     });
@@ -170,34 +168,26 @@ export class OwnersService {
     const take = limit;
 
     const [clinicOwners, originOwners, originPets, clinicClosedVisits, clinicVaccinations] = await Promise.all([
-      (this.prisma as any).clinicOwner?.findMany
-        ? (this.prisma as any).clinicOwner.findMany({
-            where: { clinicId, status: 'ACTIVE' },
-            select: { ownerId: true, expiresAt: true },
-          })
-        : Promise.resolve([]),
+      this.prisma.clinicOwner.findMany({
+        where: { clinicId, status: 'ACTIVE' },
+        select: { ownerId: true, expiresAt: true },
+      }),
       this.prisma.owner.findMany({
         where: { createdByClinicId: clinicId, deletedAt: null },
         select: { id: true },
       }),
-      (this.prisma as any).pet?.findMany
-        ? (this.prisma as any).pet.findMany({
-            where: { createdByClinicId: clinicId, deletedAt: null },
-            select: { ownerId: true },
-          })
-        : Promise.resolve([]),
-      (this.prisma as any).visit?.findMany
-        ? (this.prisma as any).visit.findMany({
-            where: { clinicId, closedAt: { not: null }, deletedAt: null },
-            select: { petId: true },
-          })
-        : Promise.resolve([]),
-      (this.prisma as any).vaccination?.findMany
-        ? (this.prisma as any).vaccination.findMany({
-            where: { clinicId, deletedAt: null },
-            select: { petId: true },
-          })
-        : Promise.resolve([]),
+      this.prisma.pet.findMany({
+        where: { createdByClinicId: clinicId, deletedAt: null },
+        select: { ownerId: true },
+      }),
+      this.prisma.visit.findMany({
+        where: { clinicId, closedAt: { not: null }, deletedAt: null },
+        select: { petId: true },
+      }),
+      this.prisma.vaccination.findMany({
+        where: { clinicId, deletedAt: null },
+        select: { petId: true },
+      }),
     ]);
 
     const now = new Date();
@@ -213,8 +203,8 @@ export class OwnersService {
     );
 
     let carePetOwnerIds: string[] = [];
-    if (relevantPetIds.length > 0 && (this.prisma as any).pet?.findMany) {
-      const pets = await (this.prisma as any).pet.findMany({
+    if (relevantPetIds.length > 0) {
+      const pets = await this.prisma.pet.findMany({
         where: { id: { in: relevantPetIds }, deletedAt: null },
         select: { ownerId: true },
       });
@@ -368,11 +358,9 @@ export class OwnersService {
       return this.filterOwnerProjection(owner, true);
     }
 
-    const clinicOwner = (this.prisma as any).clinicOwner
-      ? await (this.prisma as any).clinicOwner.findFirst({
-          where: { clinicId, ownerId: id, status: 'ACTIVE' },
-        })
-      : null;
+    const clinicOwner = await this.prisma.clinicOwner.findFirst({
+      where: { clinicId, ownerId: id, status: 'ACTIVE' },
+    });
 
     if (!clinicOwner) {
       throw new NotFoundException('Dueño no encontrado');

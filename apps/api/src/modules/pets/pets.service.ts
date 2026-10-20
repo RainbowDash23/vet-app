@@ -47,12 +47,10 @@ export class PetsService {
 
     const isOrigin = owner.createdByClinicId === clinicId;
     let hasClinicOwner = false;
-    if ((this.prisma as any).clinicOwner) {
-      const co = await (this.prisma as any).clinicOwner.findFirst({
-        where: { clinicId, ownerId: createPetDto.ownerId, status: 'ACTIVE' },
-      });
-      if (co) hasClinicOwner = true;
-    }
+    const co = await this.prisma.clinicOwner.findFirst({
+      where: { clinicId, ownerId: createPetDto.ownerId, status: 'ACTIVE' },
+    });
+    if (co) hasClinicOwner = true;
 
     if (!isOrigin && !hasClinicOwner) {
       throw new NotFoundException('Dueño no encontrado o no vinculado a esta clínica');
