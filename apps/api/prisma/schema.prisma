@@ -80,6 +80,11 @@ enum NotificationStatus {
   CANCELLED
 }
 
+enum ClinicOwnerStatus {
+  ACTIVE
+  REVOKED
+}
+
 model Clinic {
   id        String    @id @default(uuid())
   name      String
@@ -201,20 +206,22 @@ model Pet {
 }
 
 model ClinicOwner {
-  id          String    @id @default(uuid())
+  id          String            @id @default(uuid())
   clinicId    String
   ownerId     String
-  consentedAt DateTime  @default(now())
-  status      String    @default("ACTIVE")
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  consentedAt DateTime          @default(now())
+  expiresAt   DateTime?
+  revokedAt   DateTime?
+  status      ClinicOwnerStatus @default(ACTIVE)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
 
   clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
   owner  Owner  @relation(fields: [ownerId], references: [id], onDelete: Cascade)
 
   @@unique([clinicId, ownerId])
-  @@index([clinicId])
-  @@index([ownerId])
+  @@index([clinicId, status])
+  @@index([ownerId, status])
   @@map("clinic_owners")
 }
 

@@ -110,6 +110,10 @@ describe('OwnersService & OwnersController (T12 / RF-14, RF-15, RF-16, RF-19)', 
         findFirst: async () => null,
         findMany: async () => [],
       },
+      vaccination: {
+        findFirst: async () => null,
+        findMany: async () => [],
+      },
       owner: {
         findFirst: async ({ where }: any) => {
           return (
@@ -138,13 +142,18 @@ describe('OwnersService & OwnersController (T12 / RF-14, RF-15, RF-16, RF-19)', 
             if (lastNameVal && !o.lastName.toLowerCase().includes(String(lastNameVal).toLowerCase())) return false;
 
             if (where?.OR && Array.isArray(where.OR)) {
-              const matchesAny = where.OR.some((clause: any) => {
+              const matchesClause = (clause: any): boolean => {
+                if (clause.id?.in && Array.isArray(clause.id.in) && !clause.id.in.includes(o.id)) return false;
+                if (clause.OR && Array.isArray(clause.OR)) {
+                  return clause.OR.some(matchesClause);
+                }
                 if (clause.name?.contains && o.name.toLowerCase().includes(clause.name.contains.toLowerCase())) return true;
                 if (clause.lastName?.contains && o.lastName.toLowerCase().includes(clause.lastName.contains.toLowerCase())) return true;
                 if (clause.documentId?.contains && o.documentId.toLowerCase().includes(clause.documentId.contains.toLowerCase())) return true;
                 if (clause.phone?.contains && o.phone.includes(clause.phone.contains)) return true;
                 return false;
-              });
+              };
+              const matchesAny = where.OR.some(matchesClause);
               if (!matchesAny) return false;
             }
             return true;
@@ -174,13 +183,18 @@ describe('OwnersService & OwnersController (T12 / RF-14, RF-15, RF-16, RF-19)', 
             if (lastNameVal && !o.lastName.toLowerCase().includes(String(lastNameVal).toLowerCase())) return false;
 
             if (where?.OR && Array.isArray(where.OR)) {
-              const matchesAny = where.OR.some((clause: any) => {
+              const matchesClause = (clause: any): boolean => {
+                if (clause.id?.in && Array.isArray(clause.id.in) && !clause.id.in.includes(o.id)) return false;
+                if (clause.OR && Array.isArray(clause.OR)) {
+                  return clause.OR.some(matchesClause);
+                }
                 if (clause.name?.contains && o.name.toLowerCase().includes(clause.name.contains.toLowerCase())) return true;
                 if (clause.lastName?.contains && o.lastName.toLowerCase().includes(clause.lastName.contains.toLowerCase())) return true;
                 if (clause.documentId?.contains && o.documentId.toLowerCase().includes(clause.documentId.contains.toLowerCase())) return true;
                 if (clause.phone?.contains && o.phone.includes(clause.phone.contains)) return true;
                 return false;
-              });
+              };
+              const matchesAny = where.OR.some(matchesClause);
               if (!matchesAny) return false;
             }
             return true;

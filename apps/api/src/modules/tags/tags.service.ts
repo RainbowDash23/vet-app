@@ -80,18 +80,31 @@ export class TagsService {
         tx,
       );
 
-      // Vincular al dueño con la clínica en ClinicOwner si aún no está vinculado (Punto Dos)
+      // Vincular al dueño con la clínica en ClinicOwner (Punto Dos y Punto Cuatro)
       if (tag.pet?.ownerId && (tx as any).clinicOwner) {
         const existingLink = await (tx as any).clinicOwner.findFirst({
           where: { clinicId, ownerId: tag.pet.ownerId },
         });
+        const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // Vencimiento a 30 días
         if (!existingLink) {
           await (tx as any).clinicOwner.create({
             data: {
               clinicId,
               ownerId: tag.pet.ownerId,
               consentedAt: new Date(),
+              expiresAt,
               status: 'ACTIVE',
+            },
+          });
+        } else {
+          // Re-escaneo tras revocación o vencimiento reactiva el vínculo con nuevo consentimiento y vencimiento (Punto Cuatro)
+          await (tx as any).clinicOwner.update({
+            where: { id: existingLink.id },
+            data: {
+              status: 'ACTIVE',
+              revokedAt: null,
+              consentedAt: new Date(),
+              expiresAt,
             },
           });
         }

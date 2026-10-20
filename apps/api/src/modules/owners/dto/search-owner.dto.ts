@@ -26,6 +26,21 @@ export class SearchOwnerQueryDto {
   lastName?: string;
 
   @IsOptional()
+  @IsString({ message: 'El nombre debe ser una cadena de texto' })
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  name?: string;
+
+  @IsOptional()
+  @IsString({ message: 'El correo electrónico debe ser una cadena de texto' })
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  email?: string;
+
+  @IsOptional()
+  @IsString({ message: 'La dirección debe ser una cadena de texto' })
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  address?: string;
+
+  @IsOptional()
   @Type(() => Number)
   @IsInt({ message: 'La página debe ser un número entero' })
   @Min(1, { message: 'La página mínima permitida es 1' })

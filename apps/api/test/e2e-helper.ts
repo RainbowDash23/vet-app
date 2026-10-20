@@ -277,8 +277,27 @@ function matchCriteria(item: any, where: any): boolean {
       if ('notIn' in condition && Array.isArray(condition.notIn)) {
         if (condition.notIn.includes(item[key])) return false;
       }
+      if ('contains' in condition) {
+        const itemVal = String(item[key] ?? '');
+        const target = String(condition.contains ?? '');
+        if (condition.mode === 'insensitive') {
+          if (!itemVal.toLowerCase().includes(target.toLowerCase())) return false;
+        } else {
+          if (!itemVal.includes(target)) return false;
+        }
+      }
       if ('not' in condition) {
         if (item[key] === condition.not) return false;
+      }
+      const operatorKeys = ['gt', 'gte', 'lt', 'lte', 'in', 'notIn', 'contains', 'not', 'mode'];
+      const hasOperator = Object.keys(condition).some((k) => operatorKeys.includes(k));
+      if (!hasOperator) {
+        if (item[key] === undefined || item[key] === null) return false;
+        if (typeof item[key] === 'object') {
+          if (!matchCriteria(item[key], condition)) return false;
+        } else {
+          return false;
+        }
       }
       continue;
     }
@@ -649,9 +668,16 @@ export async function syncInMemoryDbToPostgres(prisma: any, db: InMemoryDb): Pro
         clinicId: co.clinicId,
         ownerId: co.ownerId,
         consentedAt: co.consentedAt || new Date(),
+        expiresAt: co.expiresAt || null,
+        revokedAt: co.revokedAt || null,
         status: co.status || 'ACTIVE',
       },
-      update: {},
+      update: {
+        status: co.status || 'ACTIVE',
+        consentedAt: co.consentedAt || new Date(),
+        expiresAt: co.expiresAt || null,
+        revokedAt: co.revokedAt || null,
+      },
     });
   }
 

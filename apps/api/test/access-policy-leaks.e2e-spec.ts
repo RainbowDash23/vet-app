@@ -598,4 +598,377 @@ describe('E2E: Demostración de Fugas de Seguridad y Aislamiento Multi-Tenant (s
       );
     });
   });
+
+  describe('Prueba Cinco: hasCareRelationship y proyección condicional de datos del dueño (RF-60)', () => {
+    it('debe mostrar solo name, lastName y phone si solo hay escaneo o citas no cerradas; y proyección completa tras cerrar visita médica o vacunar', async () => {
+      const owner4Id = '99999999-4444-4444-8444-999999999994';
+      const pet4Id = '99999999-4444-4444-8444-999999999995';
+      const tag4Uid = '04AABBCCDDEE';
+
+      db.owners.push({
+        id: owner4Id,
+        documentId: 'DOC-CARE-444',
+        name: 'Carlos',
+        lastName: 'Mendoza',
+        phone: '+593944444444',
+        email: 'care444@vetapp.com',
+        address: 'Av. Siempre Viva 444',
+        createdByClinicId: CLINIC_A_ID,
+        deletedAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+      db.pets.push({
+        id: pet4Id,
+        name: 'Max',
+        species: 'CANINE',
+        breed: 'Labrador',
+        ownerId: owner4Id,
+        createdByClinicId: CLINIC_A_ID,
+        deletedAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+      db.tags.push({
+        id: 'tag-9999-4444-8444-999999999996',
+        uid: tag4Uid,
+        publicCode: 'pub-9999-444',
+        status: TagStatus.ACTIVE,
+        petId: pet4Id,
+        deletedAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+      if (testContext.syncToPostgres) {
+        await testContext.syncToPostgres();
+      }
+
+      // 1. Clínica B escanea el tag
+      const scanRes = await request(app.getHttpServer())
+        .get(`/tags/resolve/${tag4Uid}`)
+        .set('Authorization', `Bearer ${vetBToken}`);
+      assert.strictEqual(scanRes.status, 200);
+
+      // 2. Consulta GET /owners/:id por Clínica B: DEBE SER PROYECCIÓN MÍNIMA
+      const minOwnerRes = await request(app.getHttpServer())
+        .get(`/owners/${owner4Id}`)
+        .set('Authorization', `Bearer ${vetBToken}`);
+      assert.strictEqual(minOwnerRes.status, 200);
+      assert.strictEqual(minOwnerRes.body.name, 'Carlos');
+      assert.strictEqual(minOwnerRes.body.lastName, 'Mendoza');
+      assert.strictEqual(minOwnerRes.body.phone, '+593944444444');
+      assert.strictEqual(minOwnerRes.body.documentId, undefined, 'documentId debe omitirse en proyección mínima');
+      assert.strictEqual(minOwnerRes.body.email, undefined, 'email debe omitirse en proyección mínima');
+      assert.strictEqual(minOwnerRes.body.address, undefined, 'address debe omitirse en proyección mínima');
+
+      // 3. Clínica B agenda una visita (status: SCHEDULED, closedAt: null)
+      const visitRes = await request(app.getHttpServer())
+        .post('/visits')
+        .set('Authorization', `Bearer ${vetBToken}`)
+        .send({
+          petId: pet4Id,
+          vetId: USER_VET_B_ID,
+          scheduledDate: new Date(Date.now() + 86400000).toISOString(),
+          durationMinutes: 30,
+          reason: 'Control rutinario preventivo',
+        });
+      assert.strictEqual(visitRes.status, 201);
+      const visitId = visitRes.body.id;
+
+      // Las visitas no cerradas NO otorgan care relationship
+      const stillMinOwnerRes = await request(app.getHttpServer())
+        .get(`/owners/${owner4Id}`)
+        .set('Authorization', `Bearer ${vetBToken}`);
+      assert.strictEqual(stillMinOwnerRes.status, 200);
+      assert.strictEqual(stillMinOwnerRes.body.documentId, undefined, 'Visita SCHEDULED no debe otorgar proyección completa');
+
+      // 4. Veterinario de Clínica B atiende y CIERRA la visita formalmente
+      await request(app.getHttpServer())
+        .patch(`/visits/${visitId}/attend`)
+        .set('Authorization', `Bearer ${vetBToken}`)
+        .send({ diagnosis: 'Paciente sano', weight: 25.5 });
+
+      const closeRes = await request(app.getHttpServer())
+        .post(`/visits/${visitId}/close`)
+        .set('Authorization', `Bearer ${vetBToken}`);
+      assert.strictEqual(closeRes.status, 201);
+
+      // 5. Ahora Clínica B SÍ tiene care relationship y debe ver la PROYECCIÓN COMPLETA
+      const fullOwnerRes = await request(app.getHttpServer())
+        .get(`/owners/${owner4Id}`)
+        .set('Authorization', `Bearer ${vetBToken}`);
+      assert.strictEqual(fullOwnerRes.status, 200);
+      assert.strictEqual(fullOwnerRes.body.name, 'Carlos');
+      assert.strictEqual(fullOwnerRes.body.documentId, 'DOC-CARE-444', 'documentId debe ser visible con care relationship');
+      assert.strictEqual(fullOwnerRes.body.email, 'care444@vetapp.com', 'email debe ser visible con care relationship');
+      assert.strictEqual(fullOwnerRes.body.address, 'Av. Siempre Viva 444', 'address debe ser visible con care relationship');
+    });
+  });
+
+  describe('Prueba Seis: Inferencia en GET /owners mediante búsqueda y filtros bloqueada para vínculo mínimo (RF-60)', () => {
+    it('los filtros por documentId, email y address no deben operar sobre dueños con vínculo mínimo, evitando inferencia de datos privados', async () => {
+      const owner5Id = '99999999-5555-5555-8555-999999999995';
+      const pet5Id = '99999999-5555-5555-8555-999999999996';
+      const tag5Uid = '045555555555';
+
+      db.owners.push({
+        id: owner5Id,
+        documentId: 'DOC-SECRET-555',
+        name: 'Lucia',
+        lastName: 'Navarro',
+        phone: '+593955555555',
+        email: 'secret555@vetapp.com',
+        address: 'Calle Secreta 555',
+        createdByClinicId: CLINIC_A_ID,
+        deletedAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+      db.pets.push({
+        id: pet5Id,
+        name: 'Luna',
+        species: 'FELINE',
+        breed: 'Siames',
+        ownerId: owner5Id,
+        createdByClinicId: CLINIC_A_ID,
+        deletedAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+      db.tags.push({
+        id: 'tag-9999-5555-8555-999999999997',
+        uid: tag5Uid,
+        publicCode: 'pub-9999-555',
+        status: TagStatus.ACTIVE,
+        petId: pet5Id,
+        deletedAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+      if (testContext.syncToPostgres) {
+        await testContext.syncToPostgres();
+      }
+
+      // Clínica B escanea el tag para obtener vínculo mínimo (sin care relationship)
+      await request(app.getHttpServer())
+        .get(`/tags/resolve/${tag5Uid}`)
+        .set('Authorization', `Bearer ${vetBToken}`);
+
+      // Búsqueda por documentId: NO DEBE RETORNARLO A CLÍNICA B
+      const searchDocRes = await request(app.getHttpServer())
+        .get('/owners?documentId=DOC-SECRET-555')
+        .set('Authorization', `Bearer ${vetBToken}`);
+      assert.strictEqual(
+        searchDocRes.body.data.some((o: any) => o.id === owner5Id),
+        false,
+        'Clínica B con vínculo mínimo no debe poder inferir si existe el documentId buscando por él',
+      );
+
+      // Búsqueda por email: NO DEBE RETORNARLO A CLÍNICA B
+      const searchEmailRes = await request(app.getHttpServer())
+        .get('/owners?email=secret555@vetapp.com')
+        .set('Authorization', `Bearer ${vetBToken}`);
+      assert.strictEqual(
+        searchEmailRes.body.data.some((o: any) => o.id === owner5Id),
+        false,
+        'Clínica B con vínculo mínimo no debe poder inferir si existe el email buscando por él',
+      );
+
+      // Búsqueda por address: NO DEBE RETORNARLO A CLÍNICA B
+      const searchAddressRes = await request(app.getHttpServer())
+        .get('/owners?address=Secreta')
+        .set('Authorization', `Bearer ${vetBToken}`);
+      assert.strictEqual(
+        searchAddressRes.body.data.some((o: any) => o.id === owner5Id),
+        false,
+        'Clínica B con vínculo mínimo no debe poder inferir si existe el address buscando por él',
+      );
+
+      // Búsqueda por query general con documentId: NO DEBE RETORNARLO A CLÍNICA B
+      const searchQueryDocRes = await request(app.getHttpServer())
+        .get('/owners?query=DOC-SECRET-555')
+        .set('Authorization', `Bearer ${vetBToken}`);
+      assert.strictEqual(
+        searchQueryDocRes.body.data.some((o: any) => o.id === owner5Id),
+        false,
+        'Búsqueda global por documentId no debe retornar dueños con vínculo mínimo',
+      );
+
+      // Búsqueda por name (Lucia): SÍ lo retorna a Clínica B, pero con proyección mínima
+      const searchNameRes = await request(app.getHttpServer())
+        .get('/owners?lastName=Navarro')
+        .set('Authorization', `Bearer ${vetBToken}`);
+      const foundInName = searchNameRes.body.data.find((o: any) => o.id === owner5Id);
+      assert.ok(foundInName, 'Búsqueda por nombre o apellido debe permitir encontrar al dueño vinculado');
+      assert.strictEqual(foundInName.documentId, undefined, 'documentId debe estar censurado');
+      assert.strictEqual(foundInName.email, undefined, 'email debe estar censurado');
+      assert.strictEqual(foundInName.address, undefined, 'address debe estar censurado');
+
+      // En cambio, Clínica A (creadora con proyección completa) SÍ lo encuentra por documentId
+      const searchDocClinicaARes = await request(app.getHttpServer())
+        .get('/owners?documentId=DOC-SECRET-555')
+        .set('Authorization', `Bearer ${adminAToken}`);
+      const foundInA = searchDocClinicaARes.body.data.find((o: any) => o.id === owner5Id);
+      assert.ok(foundInA, 'Clínica A con care relationship sí puede buscar y ver por documentId');
+      assert.strictEqual(foundInA.documentId, 'DOC-SECRET-555');
+    });
+  });
+
+  describe('Prueba Siete: Vencimiento de ClinicOwner (RF-60)', () => {
+    it('un vínculo con expiresAt en el pasado debe considerarse vencido y denegar acceso con 404', async () => {
+      const owner6Id = '99999999-6666-6666-8666-999999999996';
+      db.owners.push({
+        id: owner6Id,
+        documentId: 'DOC-EXPIRED-666',
+        name: 'Roberto',
+        lastName: 'Pérez',
+        phone: '+593966666666',
+        createdByClinicId: CLINIC_A_ID,
+        deletedAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+      db.clinicOwners.push({
+        id: 'co-expired-666',
+        clinicId: CLINIC_B_ID,
+        ownerId: owner6Id,
+        consentedAt: new Date(Date.now() - 31 * 86400000),
+        expiresAt: new Date(Date.now() - 10000), // Expirado hace 10 segundos
+        status: 'ACTIVE',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+      if (testContext.syncToPostgres) {
+        await testContext.syncToPostgres();
+      }
+
+      // GET /owners/:id debe responder 404
+      const res = await request(app.getHttpServer())
+        .get(`/owners/${owner6Id}`)
+        .set('Authorization', `Bearer ${vetBToken}`);
+      assert.strictEqual(res.status, 404, 'Vínculo expirado debe devolver 404 Not Found');
+
+      // GET /owners no debe incluir al dueño expirado
+      const listRes = await request(app.getHttpServer())
+        .get('/owners')
+        .set('Authorization', `Bearer ${vetBToken}`);
+      assert.strictEqual(
+        listRes.body.data.some((o: any) => o.id === owner6Id),
+        false,
+        'Dueño con vínculo expirado no debe aparecer en GET /owners',
+      );
+    });
+  });
+
+  describe('Prueba Ocho: Re-escaneo tras revocación o vencimiento reactiva vínculo con vencimiento y traza (RF-28, RF-60)', () => {
+    it('debe reactivar el vínculo ClinicOwner con nuevo vencimiento a 30 días y registrar traza NFC_SCAN en AccessLog', async () => {
+      const owner7Id = '99999999-7777-7777-8777-999999999997';
+      const pet7Id = '99999999-7777-7777-8777-999999999998';
+      const tag7Uid = '047777777777';
+
+      db.owners.push({
+        id: owner7Id,
+        documentId: 'DOC-REVOKED-777',
+        name: 'Elena',
+        lastName: 'Rios',
+        phone: '+593977777777',
+        createdByClinicId: CLINIC_A_ID,
+        deletedAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+      db.pets.push({
+        id: pet7Id,
+        name: 'Toby',
+        species: 'CANINE',
+        breed: 'Beagle',
+        ownerId: owner7Id,
+        createdByClinicId: CLINIC_A_ID,
+        deletedAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+      db.tags.push({
+        id: 'tag-9999-7777-8777-999999999999',
+        uid: tag7Uid,
+        publicCode: 'pub-9999-777',
+        status: TagStatus.ACTIVE,
+        petId: pet7Id,
+        deletedAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+      // Vínculo previo revocado
+      db.clinicOwners.push({
+        id: 'co-revoked-777',
+        clinicId: CLINIC_B_ID,
+        ownerId: owner7Id,
+        consentedAt: new Date(Date.now() - 50000),
+        expiresAt: new Date(Date.now() + 86400000),
+        revokedAt: new Date(Date.now() - 10000),
+        status: 'REVOKED',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+      if (testContext.syncToPostgres) {
+        await testContext.syncToPostgres();
+      }
+
+      // Antes del re-escaneo: Clínica B ve 404
+      const resBefore = await request(app.getHttpServer())
+        .get(`/owners/${owner7Id}`)
+        .set('Authorization', `Bearer ${vetBToken}`);
+      assert.strictEqual(resBefore.status, 404, 'Dueño con vínculo REVOKED debe ser 404');
+
+      const logsBeforeCount = db.accessLogs.length;
+
+      // Re-escaneo del tag NFC
+      const scanRes = await request(app.getHttpServer())
+        .get(`/tags/resolve/${tag7Uid}`)
+        .set('Authorization', `Bearer ${vetBToken}`);
+      assert.strictEqual(scanRes.status, 200);
+
+      // Traza en AccessLog y estado de ClinicOwner
+      if (testContext.isRealDb) {
+        const latestLog = await testContext.prisma.accessLog.findFirst({
+          where: { petId: pet7Id, clinicId: CLINIC_B_ID, action: AccessAction.NFC_SCAN },
+          orderBy: { timestamp: 'desc' },
+        });
+        assert.ok(latestLog, 'Debe existir la traza en AccessLog en PostgreSQL');
+        assert.strictEqual(latestLog.action, AccessAction.NFC_SCAN);
+        assert.strictEqual(latestLog.petId, pet7Id);
+        assert.strictEqual(latestLog.clinicId, CLINIC_B_ID);
+
+        const updatedLink = await (testContext.prisma as any).clinicOwner.findFirst({
+          where: { clinicId: CLINIC_B_ID, ownerId: owner7Id },
+        });
+        assert.ok(updatedLink, 'Debe existir el vínculo en PostgreSQL');
+        assert.strictEqual(updatedLink.status, 'ACTIVE');
+        assert.strictEqual(updatedLink.revokedAt, null);
+        assert.ok(new Date(updatedLink.expiresAt) > new Date(Date.now() + 20 * 86400000));
+      } else {
+        assert.strictEqual(db.accessLogs.length, logsBeforeCount + 1);
+        const latestLog = db.accessLogs[db.accessLogs.length - 1];
+        assert.strictEqual(latestLog.action, AccessAction.NFC_SCAN);
+        assert.strictEqual(latestLog.petId, pet7Id);
+        assert.strictEqual(latestLog.clinicId, CLINIC_B_ID);
+
+        const updatedLink = db.clinicOwners.find(
+          (co: any) => co.clinicId === CLINIC_B_ID && co.ownerId === owner7Id,
+        );
+        assert.ok(updatedLink, 'Debe existir el vínculo');
+        assert.strictEqual(updatedLink.status, 'ACTIVE');
+        assert.strictEqual(updatedLink.revokedAt, null);
+        assert.ok(updatedLink.expiresAt > new Date(Date.now() + 20 * 86400000));
+      }
+
+      // Tras re-escaneo: Clínica B puede consultar al dueño con proyección mínima
+      const resAfter = await request(app.getHttpServer())
+        .get(`/owners/${owner7Id}`)
+        .set('Authorization', `Bearer ${vetBToken}`);
+      assert.strictEqual(resAfter.status, 200);
+      assert.strictEqual(resAfter.body.name, 'Elena');
+      assert.strictEqual(resAfter.body.documentId, undefined);
+    });
+  });
 });
