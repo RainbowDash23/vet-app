@@ -11,6 +11,11 @@ dist-electron/
 **/dist-electron/
 apps/desktop/dist-electron/
 
+# Local-only documentation, specifications and firmware
+docs/
+specs/
+firmware/
+
 # Environment & credentials
 .env
 .env.local
