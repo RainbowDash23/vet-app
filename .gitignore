@@ -7,7 +7,7 @@ dist/
 build/
 out/
 *.tsbuildinfo
-
+dist-electron/
 # Documentation & Specs
 docs/
 specs/
