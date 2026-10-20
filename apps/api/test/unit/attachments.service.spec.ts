@@ -131,15 +131,22 @@ describe('AttachmentsService & AttachmentsController - T23 (RF-49, RF-50, RNF-8)
         },
       },
       attachment: {
-        findFirst: async ({ where }: any) => {
-          return (
-            mockAttachments.find((a) => {
-              if (where.id && a.id !== where.id) return false;
-              if (where.deletedAt === null && a.deletedAt !== null) return false;
-              if (where.petId && a.petId !== where.petId) return false;
-              return true;
-            }) || null
-          );
+        findFirst: async ({ where, include }: any) => {
+          const found = mockAttachments.find((a) => {
+            if (where.id && a.id !== where.id) return false;
+            if (where.deletedAt === null && a.deletedAt !== null) return false;
+            if (where.petId && a.petId !== where.petId) return false;
+            return true;
+          });
+          if (!found) return null;
+          const res: any = { ...found };
+          if (include?.visit && res.visitId) {
+            res.visit = mockVisits.find((v) => v.id === res.visitId) || null;
+          }
+          if (include?.pet && res.petId) {
+            res.pet = mockPets.find((p) => p.id === res.petId) || null;
+          }
+          return res;
         },
         findMany: async ({ where, orderBy }: any) => {
           let list = mockAttachments.filter((a) => {
@@ -652,6 +659,7 @@ describe('AttachmentsService & AttachmentsController - T23 (RF-49, RF-50, RNF-8)
       const deleted = await attachmentsService.softDelete(
         attachmentId,
         validUserId,
+        validClinicId,
       );
 
       assert.ok(deleted);
@@ -670,6 +678,7 @@ describe('AttachmentsService & AttachmentsController - T23 (RF-49, RF-50, RNF-8)
           attachmentsService.softDelete(
             '00000000-0000-4000-8000-000000000000',
             validUserId,
+            validClinicId,
           ),
         (err: any) => {
           assert.ok(err instanceof NotFoundException);
@@ -738,7 +747,7 @@ describe('AttachmentsService & AttachmentsController - T23 (RF-49, RF-50, RNF-8)
       const req: any = {
         user: { id: validUserId, clinicId: validClinicId },
       };
-      const res = await attachmentsController.remove(req, attachmentId);
+      const res = await attachmentsController.remove(validClinicId, req, attachmentId);
       assert.ok(res);
       assert.ok(res.deletedAt !== null);
     });

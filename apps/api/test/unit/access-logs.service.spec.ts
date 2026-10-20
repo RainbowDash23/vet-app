@@ -330,8 +330,8 @@ describe('AccessLogsService & AccessLogsController (T14 / RF-25, RF-37, RNF-7)',
 
     it('findAll en controlador debe delegar a service.findAll()', async () => {
       const query: QueryAccessLogDto = { page: 1, limit: 10 };
-      const response = await accessLogsController.findAll(query);
-      assert.strictEqual(response.meta.total, 3);
+      const response = await accessLogsController.findAll(validClinicId, query);
+      assert.strictEqual(response.meta.total, 2);
     });
 
     it('findByPetId en controlador debe delegar a service.findByPetId()', async () => {

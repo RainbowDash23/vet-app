@@ -23,6 +23,7 @@ interface MockOwner {
   deletedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
+  createdByClinicId?: string | null;
 }
 
 interface MockPet {
@@ -38,6 +39,7 @@ describe('OwnersService & OwnersController (T12 / RF-14, RF-15, RF-16, RF-19)', 
   let mockPrisma: any;
   let ownersDb: MockOwner[];
   let petsDb: MockPet[];
+  const validClinicId = 'clinic-uuid-1';
 
   beforeEach(() => {
     ownersDb = [
@@ -52,6 +54,7 @@ describe('OwnersService & OwnersController (T12 / RF-14, RF-15, RF-16, RF-19)', 
         deletedAt: null,
         createdAt: new Date('2026-01-10T10:00:00Z'),
         updatedAt: new Date('2026-01-10T10:00:00Z'),
+        createdByClinicId: validClinicId,
       },
       {
         id: 'owner-uuid-2',
@@ -64,6 +67,7 @@ describe('OwnersService & OwnersController (T12 / RF-14, RF-15, RF-16, RF-19)', 
         deletedAt: null,
         createdAt: new Date('2026-01-15T12:00:00Z'),
         updatedAt: new Date('2026-01-15T12:00:00Z'),
+        createdByClinicId: validClinicId,
       },
       {
         id: 'owner-uuid-deleted',
@@ -76,6 +80,7 @@ describe('OwnersService & OwnersController (T12 / RF-14, RF-15, RF-16, RF-19)', 
         deletedAt: new Date('2026-02-01T08:00:00Z'),
         createdAt: new Date('2026-01-05T08:00:00Z'),
         updatedAt: new Date('2026-02-01T08:00:00Z'),
+        createdByClinicId: validClinicId,
       },
     ];
 
@@ -95,6 +100,16 @@ describe('OwnersService & OwnersController (T12 / RF-14, RF-15, RF-16, RF-19)', 
     ];
 
     mockPrisma = {
+      $transaction: async (fn: any) => fn(mockPrisma),
+      clinicOwner: {
+        findFirst: async () => null,
+        findMany: async () => [],
+        create: async () => ({}),
+      },
+      visit: {
+        findFirst: async () => null,
+        findMany: async () => [],
+      },
       owner: {
         findFirst: async ({ where }: any) => {
           return (
@@ -102,13 +117,16 @@ describe('OwnersService & OwnersController (T12 / RF-14, RF-15, RF-16, RF-19)', 
               if (where.id && o.id !== where.id) return false;
               if (where.documentId && o.documentId !== where.documentId) return false;
               if (where.deletedAt === null && o.deletedAt !== null) return false;
+              if (where.createdByClinicId && o.createdByClinicId !== where.createdByClinicId) return false;
               return true;
             }) ?? null
           );
         },
         findMany: async ({ where, skip, take, orderBy }: any) => {
           const matchesFilter = (o: MockOwner) => {
+            if (where?.id?.in && Array.isArray(where.id.in) && !where.id.in.includes(o.id)) return false;
             if (where?.deletedAt === null && o.deletedAt !== null) return false;
+            if (where?.createdByClinicId && o.createdByClinicId !== where.createdByClinicId) return false;
 
             const docVal = typeof where?.documentId === 'string' ? where.documentId : where?.documentId?.contains;
             if (docVal && !o.documentId.toLowerCase().includes(String(docVal).toLowerCase())) return false;
@@ -180,6 +198,7 @@ describe('OwnersService & OwnersController (T12 / RF-14, RF-15, RF-16, RF-19)', 
             deletedAt: null,
             createdAt: new Date(),
             updatedAt: new Date(),
+            createdByClinicId: data.createdByClinicId ?? validClinicId,
           };
           ownersDb.push(newOwner);
           return newOwner;
@@ -199,6 +218,7 @@ describe('OwnersService & OwnersController (T12 / RF-14, RF-15, RF-16, RF-19)', 
         },
       },
       pet: {
+        findMany: async () => [],
         count: async ({ where }: any) => {
           return petsDb.filter((p) => {
             if (where?.ownerId && p.ownerId !== where.ownerId) return false;
@@ -343,7 +363,7 @@ describe('OwnersService & OwnersController (T12 / RF-14, RF-15, RF-16, RF-19)', 
         address: 'Sector La Floresta',
       };
 
-      const result = await ownersService.create(dto);
+      const result = await ownersService.create(dto, validClinicId);
       assert.ok(result.id);
       assert.strictEqual(result.documentId, '1104567890');
       assert.strictEqual(result.name, 'Lucía');
@@ -364,7 +384,7 @@ describe('OwnersService & OwnersController (T12 / RF-14, RF-15, RF-16, RF-19)', 
 
       await assert.rejects(
         async () => {
-          await ownersService.create(duplicateDto);
+          await ownersService.create(duplicateDto, validClinicId);
         },
         (err: unknown) => {
           assert.ok(err instanceof ConflictException);
@@ -382,7 +402,7 @@ describe('OwnersService & OwnersController (T12 / RF-14, RF-15, RF-16, RF-19)', 
         phone: '+5215588776655',
       };
 
-      const result = await ownersService.create(reuseDto);
+      const result = await ownersService.create(reuseDto, validClinicId);
       assert.ok(result.id);
       assert.strictEqual(result.documentId, '0912345678');
       assert.strictEqual(result.deletedAt, null);
@@ -391,7 +411,7 @@ describe('OwnersService & OwnersController (T12 / RF-14, RF-15, RF-16, RF-19)', 
 
   describe('c) Búsqueda paginada retornando { data, meta } estructurado conforme a RF-16', () => {
     it('debe retornar estructura { data, meta } con valores por defecto (page: 1, limit: 10)', async () => {
-      const result = await ownersService.findAll({});
+      const result = await ownersService.findAll({}, validClinicId);
       assert.ok(Array.isArray(result.data));
       assert.ok(result.meta);
       assert.strictEqual(result.meta.page, 1);
@@ -404,31 +424,31 @@ describe('OwnersService & OwnersController (T12 / RF-14, RF-15, RF-16, RF-19)', 
     });
 
     it('debe filtrar correctamente por lastName', async () => {
-      const result = await ownersService.findAll({ lastName: 'gonzález' });
+      const result = await ownersService.findAll({ lastName: 'gonzález' }, validClinicId);
       assert.strictEqual(result.meta.total, 1);
       assert.strictEqual(result.data[0].lastName, 'González');
     });
 
     it('debe filtrar correctamente por documentId', async () => {
-      const result = await ownersService.findAll({ documentId: '1723456789' });
+      const result = await ownersService.findAll({ documentId: '1723456789' }, validClinicId);
       assert.strictEqual(result.meta.total, 1);
       assert.strictEqual(result.data[0].documentId, '1723456789');
     });
 
     it('debe filtrar correctamente por phone', async () => {
-      const result = await ownersService.findAll({ phone: '+54911' });
+      const result = await ownersService.findAll({ phone: '+54911' }, validClinicId);
       assert.strictEqual(result.meta.total, 1);
       assert.strictEqual(result.data[0].phone, '+5491123456789');
     });
 
     it('debe filtrar con query de texto libre en name, lastName, documentId o phone', async () => {
-      const result = await ownersService.findAll({ query: 'Carlos' });
+      const result = await ownersService.findAll({ query: 'Carlos' }, validClinicId);
       assert.strictEqual(result.meta.total, 1);
       assert.strictEqual(result.data[0].name, 'Carlos');
     });
 
     it('debe paginar correctamente con page y limit específicos', async () => {
-      const result = await ownersService.findAll({ page: 2, limit: 1 });
+      const result = await ownersService.findAll({ page: 2, limit: 1 }, validClinicId);
       assert.strictEqual(result.meta.page, 2);
       assert.strictEqual(result.meta.limit, 1);
       assert.strictEqual(result.meta.total, 2);
@@ -441,7 +461,7 @@ describe('OwnersService & OwnersController (T12 / RF-14, RF-15, RF-16, RF-19)', 
 
   describe('d) Consulta por ID y actualización de datos de dueño', () => {
     it('debe obtener un dueño activo por su ID', async () => {
-      const owner = await ownersService.findById('owner-uuid-1');
+      const owner = await ownersService.findById('owner-uuid-1', validClinicId);
       assert.strictEqual(owner.id, 'owner-uuid-1');
       assert.strictEqual(owner.name, 'Carlos');
     });
@@ -449,7 +469,7 @@ describe('OwnersService & OwnersController (T12 / RF-14, RF-15, RF-16, RF-19)', 
     it('debe lanzar NotFoundException si el dueño no existe', async () => {
       await assert.rejects(
         async () => {
-          await ownersService.findById('uuid-no-existe');
+          await ownersService.findById('uuid-no-existe', validClinicId);
         },
         (err: unknown) => {
           assert.ok(err instanceof NotFoundException);
@@ -462,7 +482,7 @@ describe('OwnersService & OwnersController (T12 / RF-14, RF-15, RF-16, RF-19)', 
     it('debe lanzar NotFoundException si el dueño está borrado lógicamente', async () => {
       await assert.rejects(
         async () => {
-          await ownersService.findById('owner-uuid-deleted');
+          await ownersService.findById('owner-uuid-deleted', validClinicId);
         },
         (err: unknown) => {
           assert.ok(err instanceof NotFoundException);
@@ -479,7 +499,7 @@ describe('OwnersService & OwnersController (T12 / RF-14, RF-15, RF-16, RF-19)', 
         address: 'Nueva Dirección 999',
       };
 
-      const updated = await ownersService.update('owner-uuid-1', updateDto);
+      const updated = await ownersService.update('owner-uuid-1', updateDto, validClinicId);
       assert.strictEqual(updated.name, 'Carlos Alberto');
       assert.strictEqual(updated.phone, '+593998888888');
       assert.strictEqual(updated.address, 'Nueva Dirección 999');
@@ -488,7 +508,7 @@ describe('OwnersService & OwnersController (T12 / RF-14, RF-15, RF-16, RF-19)', 
     it('debe lanzar NotFoundException al intentar actualizar un dueño inexistente o eliminado', async () => {
       await assert.rejects(
         async () => {
-          await ownersService.update('uuid-inexistente', { name: 'Prueba' });
+          await ownersService.update('uuid-inexistente', { name: 'Prueba' }, validClinicId);
         },
         (err: unknown) => {
           assert.ok(err instanceof NotFoundException);
@@ -503,7 +523,7 @@ describe('OwnersService & OwnersController (T12 / RF-14, RF-15, RF-16, RF-19)', 
       // owner-uuid-1 tiene Firulais activo en petsDb
       await assert.rejects(
         async () => {
-          await ownersService.softDelete('owner-uuid-1');
+          await ownersService.softDelete('owner-uuid-1', validClinicId);
         },
         (err: unknown) => {
           assert.ok(err instanceof ConflictException);
@@ -515,13 +535,13 @@ describe('OwnersService & OwnersController (T12 / RF-14, RF-15, RF-16, RF-19)', 
 
     it('debe permitir el borrado lógico si el dueño no tiene mascotas asociadas activas', async () => {
       // owner-uuid-2 no tiene mascotas en petsDb
-      const result = await ownersService.softDelete('owner-uuid-2');
+      const result = await ownersService.softDelete('owner-uuid-2', validClinicId);
       assert.ok(result.deletedAt !== null);
 
       // Verificamos que ya no aparece en findById
       await assert.rejects(
         async () => {
-          await ownersService.findById('owner-uuid-2');
+          await ownersService.findById('owner-uuid-2', validClinicId);
         },
         (err: unknown) => {
           assert.ok(err instanceof NotFoundException);
@@ -533,7 +553,7 @@ describe('OwnersService & OwnersController (T12 / RF-14, RF-15, RF-16, RF-19)', 
     it('debe lanzar NotFoundException al intentar eliminar un dueño inexistente o ya eliminado', async () => {
       await assert.rejects(
         async () => {
-          await ownersService.softDelete('owner-uuid-deleted');
+          await ownersService.softDelete('owner-uuid-deleted', validClinicId);
         },
         (err: unknown) => {
           assert.ok(err instanceof NotFoundException);
@@ -551,23 +571,23 @@ describe('OwnersService & OwnersController (T12 / RF-14, RF-15, RF-16, RF-19)', 
         lastName: 'Rios',
         phone: '+593991122334',
       };
-      const result = await ownersController.create(dto);
+      const result = await ownersController.create(validClinicId, dto);
       assert.strictEqual(result.documentId, '0987654321');
       assert.strictEqual(result.name, 'Andrea');
     });
 
     it('GET /owners debe invocar service.findAll con query', async () => {
-      const result = await ownersController.findAll({ query: 'Carlos' });
+      const result = await ownersController.findAll(validClinicId, { query: 'Carlos' });
       assert.strictEqual(result.meta.total, 1);
     });
 
     it('GET /owners/:id debe invocar service.findById', async () => {
-      const result = await ownersController.findById('owner-uuid-1');
+      const result = await ownersController.findById(validClinicId, 'owner-uuid-1');
       assert.strictEqual(result.id, 'owner-uuid-1');
     });
 
     it('PATCH /owners/:id debe invocar service.update', async () => {
-      const result = await ownersController.update('owner-uuid-1', { name: 'Carlos Nuevo' });
+      const result = await ownersController.update(validClinicId, 'owner-uuid-1', { name: 'Carlos Nuevo' });
       assert.strictEqual(result.name, 'Carlos Nuevo');
     });
 

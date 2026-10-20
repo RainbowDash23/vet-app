@@ -72,7 +72,12 @@ describe('TagsService & TagsController (T16 / RF-28, RF-29, RF-30, RF-31, RF-32,
         }),
       },
       pet: {
-        findFirst: async () => null,
+        findFirst: async () => ({
+          id: samplePetId,
+          createdByClinicId: sampleClinicId,
+          visits: [],
+          deletedAt: null,
+        }),
       },
       $transaction: async (cb: any) => {
         if (typeof cb === 'function') {
@@ -103,6 +108,7 @@ describe('TagsService & TagsController (T16 / RF-28, RF-29, RF-30, RF-31, RF-32,
         durationHours: duration,
         expiresAt: new Date(Date.now() + duration * 3600 * 1000),
       }),
+      hasActiveGrant: async () => true,
     };
 
     tagsService = new TagsService(
@@ -393,6 +399,11 @@ describe('TagsService & TagsController (T16 / RF-28, RF-29, RF-30, RF-31, RF-32,
         status: TagStatus.ACTIVE,
         petId: samplePetId,
         deletedAt: null,
+        pet: {
+          id: samplePetId,
+          createdByClinicId: sampleClinicId,
+          visits: [],
+        },
       });
 
       let updatedData: any = null;
@@ -409,7 +420,7 @@ describe('TagsService & TagsController (T16 / RF-28, RF-29, RF-30, RF-31, RF-32,
         status: TagStatus.LOST,
       };
 
-      const result = await tagsService.reportStatus('tag-1', statusDto);
+      const result = await tagsService.reportStatus('tag-1', statusDto, sampleClinicId);
 
       assert.strictEqual(result.status, TagStatus.LOST);
       assert.strictEqual(updatedData.where.id, 'tag-1');
@@ -423,6 +434,11 @@ describe('TagsService & TagsController (T16 / RF-28, RF-29, RF-30, RF-31, RF-32,
         status: TagStatus.ACTIVE,
         petId: samplePetId,
         deletedAt: null,
+        pet: {
+          id: samplePetId,
+          createdByClinicId: sampleClinicId,
+          visits: [],
+        },
       });
 
       mockPrisma.tag.update = async (args: any) => ({
@@ -432,7 +448,7 @@ describe('TagsService & TagsController (T16 / RF-28, RF-29, RF-30, RF-31, RF-32,
 
       const result = await tagsService.reportStatus('tag-1', {
         status: TagStatus.DAMAGED,
-      });
+      }, sampleClinicId);
 
       assert.strictEqual(result.status, TagStatus.DAMAGED);
     });
@@ -441,7 +457,7 @@ describe('TagsService & TagsController (T16 / RF-28, RF-29, RF-30, RF-31, RF-32,
       mockPrisma.tag.findFirst = async () => null;
 
       await assert.rejects(
-        async () => tagsService.reportStatus('tag-inexistente', { status: TagStatus.LOST }),
+        async () => tagsService.reportStatus('tag-inexistente', { status: TagStatus.LOST }, sampleClinicId),
         (err: any) => err instanceof NotFoundException && err.message.includes('no encontrado'),
       );
     });
@@ -479,7 +495,7 @@ describe('TagsService & TagsController (T16 / RF-28, RF-29, RF-30, RF-31, RF-32,
         return mockTags;
       };
 
-      const result = await tagsService.findByPetId(samplePetId);
+      const result = await tagsService.findByPetId(samplePetId, sampleClinicId);
       assert.strictEqual(result.length, 2);
       assert.strictEqual(result[0].id, 'tag-recent');
       assert.strictEqual(result[1].id, 'tag-old');
@@ -595,27 +611,31 @@ describe('TagsService & TagsController (T16 / RF-28, RF-29, RF-30, RF-31, RF-32,
       assert.ok(roles.includes(Role.ADMIN));
 
       let reportedArgs: any = null;
-      tagsService.reportStatus = async (id, dto) => {
-        reportedArgs = { id, dto };
+      tagsService.reportStatus = async (id, dto, clinicId) => {
+        reportedArgs = { id, dto, clinicId };
         return { id, status: dto.status } as any;
       };
 
       const dto: ReportTagStatusDto = { status: TagStatus.DAMAGED };
-      const res = await tagsController.reportStatus('tag-123', dto);
+      const res = await tagsController.reportStatus(sampleClinicId, 'tag-123', dto);
       assert.strictEqual(res.status, TagStatus.DAMAGED);
       assert.strictEqual(reportedArgs.id, 'tag-123');
+      assert.strictEqual(reportedArgs.clinicId, sampleClinicId);
     });
 
     it('GET /tags/pet/:petId debe delegar a findByPetId', async () => {
       let queriedPetId: string | null = null;
-      tagsService.findByPetId = async (petId) => {
+      let queriedClinicId: string | null = null;
+      tagsService.findByPetId = async (petId, clinicId) => {
         queriedPetId = petId;
+        queriedClinicId = clinicId;
         return [{ id: 'tag-1', petId }] as any;
       };
 
-      const res = await tagsController.findByPetId(samplePetId);
+      const res = await tagsController.findByPetId(sampleClinicId, samplePetId);
       assert.strictEqual(res.length, 1);
       assert.strictEqual(queriedPetId, samplePetId);
+      assert.strictEqual(queriedClinicId, sampleClinicId);
     });
   });
 });

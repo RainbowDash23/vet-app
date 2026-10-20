@@ -84,9 +84,12 @@ export class VisitsController {
    */
   @Get(':id')
   async findById(
+    @CurrentClinicId() clinicId: string,
     @Param('id') id: string,
-    @CurrentClinicId() clinicId?: string,
   ): Promise<Visit> {
+    if (!clinicId) {
+      throw new UnauthorizedException('Identificador de clínica no disponible en la sesión');
+    }
     return this.visitsService.findById(id, clinicId);
   }
 

@@ -392,7 +392,7 @@ describe('VisitsService & VisitsController (T18 / RF-39, RF-40)', () => {
     });
 
     it('findById debe retornar el detalle de una visita existente', async () => {
-      const visit = await visitsService.findById(validVisitId);
+      const visit = await visitsService.findById(validVisitId, validClinicId);
       assert.ok(visit);
       assert.strictEqual(visit.id, validVisitId);
       assert.strictEqual(visit.reason, 'Vacunación anual séxtuple');
@@ -401,7 +401,7 @@ describe('VisitsService & VisitsController (T18 / RF-39, RF-40)', () => {
     it('findById debe lanzar NotFoundException ante visita inexistente', async () => {
       await assert.rejects(
         async () => {
-          await visitsService.findById('00000000-0000-4000-8000-000000000000');
+          await visitsService.findById('00000000-0000-4000-8000-000000000000', validClinicId);
         },
         (error: any) => {
           assert.ok(error instanceof NotFoundException);
@@ -555,8 +555,8 @@ describe('VisitsService & VisitsController (T18 / RF-39, RF-40)', () => {
       assert.strictEqual(result.meta.total, 1);
     });
 
-    it('GET /visits/:id debe delegar a findById con id', async () => {
-      const result = await visitsController.findById(validVisitId);
+    it('GET /visits/:id debe delegar a findById con clinicId e id', async () => {
+      const result = await visitsController.findById(validClinicId, validVisitId);
       assert.ok(result);
       assert.strictEqual(result.id, validVisitId);
     });

@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
   Optional,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { GrantScope, Prisma, Visit, VisitStatus } from '@prisma/client';
 import { PaginatedResult } from '@vet-app/shared-types';
@@ -187,15 +188,16 @@ export class VisitsService {
   /**
    * Consulta el detalle de una visita por su identificador único.
    */
-  async findById(id: string, clinicId?: string): Promise<Visit> {
+  async findById(id: string, clinicId: string): Promise<Visit> {
+    if (!clinicId) {
+      throw new UnauthorizedException('Identificador de clínica no disponible en la sesión');
+    }
+
     const where: Prisma.VisitWhereInput = {
       id,
+      clinicId,
       deletedAt: null,
     };
-
-    if (clinicId) {
-      where.clinicId = clinicId;
-    }
 
     const visit = await this.prisma.visit.findFirst({
       where,

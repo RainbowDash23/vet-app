@@ -8,6 +8,7 @@ import {
   Param,
   Patch,
   Post,
+  UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import { Clinic, Role } from '@prisma/client';
@@ -68,10 +69,13 @@ export class ClinicsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
   async findById(
+    @CurrentClinicId() clinicId: string,
     @Param('id') id: string,
-    @CurrentClinicId() clinicId?: string,
   ): Promise<Clinic> {
-    if (clinicId && id !== clinicId) {
+    if (!clinicId) {
+      throw new UnauthorizedException('Identificador de clínica no disponible en la sesión');
+    }
+    if (id !== clinicId) {
       throw new NotFoundException('Clínica no encontrada');
     }
     return this.clinicsService.findById(id);
@@ -85,11 +89,14 @@ export class ClinicsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
   async update(
+    @CurrentClinicId() clinicId: string,
     @Param('id') id: string,
     @Body() updateClinicDto: UpdateClinicDto,
-    @CurrentClinicId() clinicId?: string,
   ): Promise<Clinic> {
-    if (clinicId && id !== clinicId) {
+    if (!clinicId) {
+      throw new UnauthorizedException('Identificador de clínica no disponible en la sesión');
+    }
+    if (id !== clinicId) {
       throw new NotFoundException('Clínica no encontrada');
     }
     return this.clinicsService.update(id, updateClinicDto);

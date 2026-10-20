@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { Attachment, GrantScope } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
@@ -200,7 +201,11 @@ export class AttachmentsService {
    * Borrado lógico de un archivo adjunto clínico (RF-49, RF-63).
    * Restringido a la clínica propietaria de la atención o paciente.
    */
-  async softDelete(attachmentId: string, _userId: string, clinicId?: string): Promise<Attachment> {
+  async softDelete(attachmentId: string, _userId: string, clinicId: string): Promise<Attachment> {
+    if (!clinicId) {
+      throw new UnauthorizedException('Identificador de clínica no disponible en la sesión');
+    }
+
     const attachment = await this.prisma.attachment.findFirst({
       where: {
         id: attachmentId,
@@ -220,21 +225,19 @@ export class AttachmentsService {
       throw new NotFoundException('Archivo adjunto no encontrado');
     }
 
-    if (clinicId) {
-      let isAuthorized = false;
-      if (attachment.visit && attachment.visit.clinicId === clinicId) {
+    let isAuthorized = false;
+    if (attachment.visit && attachment.visit.clinicId === clinicId) {
+      isAuthorized = true;
+    } else if (attachment.pet) {
+      const isOrigin = attachment.pet.createdByClinicId === clinicId;
+      const hasVisitsInClinic = attachment.pet.visits?.some((v: any) => v.clinicId === clinicId);
+      if (isOrigin || hasVisitsInClinic) {
         isAuthorized = true;
-      } else if (attachment.pet) {
-        const isOrigin = attachment.pet.createdByClinicId === clinicId;
-        const hasVisitsInClinic = attachment.pet.visits?.some((v: any) => v.clinicId === clinicId);
-        if (isOrigin || hasVisitsInClinic) {
-          isAuthorized = true;
-        }
       }
+    }
 
-      if (!isAuthorized) {
-        throw new NotFoundException('Archivo adjunto no encontrado');
-      }
+    if (!isAuthorized) {
+      throw new NotFoundException('Archivo adjunto no encontrado');
     }
 
     return this.prisma.attachment.update({

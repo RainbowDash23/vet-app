@@ -21,6 +21,7 @@ interface MockOwner {
   email: string | null;
   address: string | null;
   deletedAt: Date | null;
+  createdByClinicId?: string | null;
 }
 
 interface MockPet {
@@ -38,6 +39,7 @@ interface MockPet {
   deletedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
+  createdByClinicId?: string | null;
 }
 
 interface MockTag {
@@ -65,6 +67,7 @@ describe('PetsService & PetsController (T13 / RF-17, RF-18, RF-19, RF-20)', () =
   let petsDb: MockPet[];
   let tagsDb: MockTag[];
   let visitsDb: MockVisit[];
+  const validClinicId = 'clinic-uuid-1';
 
   beforeEach(() => {
     ownersDb = [
@@ -77,6 +80,7 @@ describe('PetsService & PetsController (T13 / RF-17, RF-18, RF-19, RF-20)', () =
         email: 'carlos@example.com',
         address: 'Av. Amazonas 123',
         deletedAt: null,
+        createdByClinicId: validClinicId,
       },
       {
         id: 'owner-uuid-deleted',
@@ -87,6 +91,7 @@ describe('PetsService & PetsController (T13 / RF-17, RF-18, RF-19, RF-20)', () =
         email: 'elena@example.com',
         address: 'Av. 10 de Agosto 456',
         deletedAt: new Date('2026-01-01T00:00:00.000Z'),
+        createdByClinicId: validClinicId,
       },
     ];
 
@@ -106,6 +111,7 @@ describe('PetsService & PetsController (T13 / RF-17, RF-18, RF-19, RF-20)', () =
         deletedAt: null,
         createdAt: new Date('2022-04-01T10:00:00.000Z'),
         updatedAt: new Date('2022-04-01T10:00:00.000Z'),
+        createdByClinicId: validClinicId,
       },
       {
         id: 'pet-uuid-2',
@@ -122,6 +128,7 @@ describe('PetsService & PetsController (T13 / RF-17, RF-18, RF-19, RF-20)', () =
         deletedAt: null,
         createdAt: new Date('2023-07-01T10:00:00.000Z'),
         updatedAt: new Date('2023-07-01T10:00:00.000Z'),
+        createdByClinicId: validClinicId,
       },
       {
         id: 'pet-uuid-deleted',
@@ -138,6 +145,7 @@ describe('PetsService & PetsController (T13 / RF-17, RF-18, RF-19, RF-20)', () =
         deletedAt: new Date('2025-12-01T00:00:00.000Z'),
         createdAt: new Date('2020-01-10T10:00:00.000Z'),
         updatedAt: new Date('2025-12-01T00:00:00.000Z'),
+        createdByClinicId: validClinicId,
       },
     ];
 
@@ -164,13 +172,17 @@ describe('PetsService & PetsController (T13 / RF-17, RF-18, RF-19, RF-20)', () =
       {
         id: 'visit-uuid-1',
         petId: 'pet-uuid-1',
-        clinicId: 'clinic-uuid-1',
+        clinicId: validClinicId,
         veterinarianId: 'user-vet-1',
         status: 'COMPLETED',
       },
     ];
 
     mockPrisma = {
+      clinicOwner: {
+        findFirst: async () => null,
+        findMany: async () => [],
+      },
       owner: {
         findFirst: async ({ where }: any) => {
           return ownersDb.find((o) => {
@@ -197,6 +209,7 @@ describe('PetsService & PetsController (T13 / RF-17, RF-18, RF-19, RF-20)', () =
             deletedAt: null,
             createdAt: new Date(),
             updatedAt: new Date(),
+            createdByClinicId: data.createdByClinicId ?? validClinicId,
           };
           petsDb.push(newPet);
           return newPet;
@@ -214,6 +227,9 @@ describe('PetsService & PetsController (T13 / RF-17, RF-18, RF-19, RF-20)', () =
           }
           if (include?.tags) {
             res.tags = tagsDb.filter((t) => t.petId === pet.id && t.deletedAt === null);
+          }
+          if (include?.visits) {
+            res.visits = visitsDb.filter((v) => v.petId === pet.id);
           }
           return res;
         },
@@ -309,7 +325,7 @@ describe('PetsService & PetsController (T13 / RF-17, RF-18, RF-19, RF-20)', () =
         ownerId: 'owner-uuid-1',
       };
 
-      const result = await petsService.create(dto);
+      const result = await petsService.create(dto, validClinicId);
 
       assert.ok(result);
       assert.strictEqual(result.name, 'Rocky');
@@ -330,7 +346,7 @@ describe('PetsService & PetsController (T13 / RF-17, RF-18, RF-19, RF-20)', () =
         ownerId: 'owner-uuid-1',
       };
 
-      const result = await petsService.create(dto);
+      const result = await petsService.create(dto, validClinicId);
 
       assert.strictEqual(result.name, 'Mishi');
       assert.strictEqual(result.sex, PetSex.UNKNOWN);
@@ -350,7 +366,7 @@ describe('PetsService & PetsController (T13 / RF-17, RF-18, RF-19, RF-20)', () =
 
       await assert.rejects(
         async () => {
-          await petsService.create(dto);
+          await petsService.create(dto, validClinicId);
         },
         (err: any) => {
           assert.ok(err instanceof NotFoundException);
@@ -371,7 +387,7 @@ describe('PetsService & PetsController (T13 / RF-17, RF-18, RF-19, RF-20)', () =
 
       await assert.rejects(
         async () => {
-          await petsService.create(dto);
+          await petsService.create(dto, validClinicId);
         },
         (err: any) => {
           assert.ok(err instanceof NotFoundException);
@@ -388,7 +404,7 @@ describe('PetsService & PetsController (T13 / RF-17, RF-18, RF-19, RF-20)', () =
       // pet-uuid-1 tiene una visita registrada en visitsDb
       await assert.rejects(
         async () => {
-          await petsService.softDelete('pet-uuid-1');
+          await petsService.softDelete('pet-uuid-1', validClinicId);
         },
         (err: any) => {
           assert.ok(err instanceof ConflictException);
@@ -405,7 +421,7 @@ describe('PetsService & PetsController (T13 / RF-17, RF-18, RF-19, RF-20)', () =
     it('debe arrojar NotFoundException si la mascota a eliminar no existe o ya está eliminada', async () => {
       await assert.rejects(
         async () => {
-          await petsService.softDelete('pet-uuid-deleted');
+          await petsService.softDelete('pet-uuid-deleted', validClinicId);
         },
         (err: any) => {
           assert.ok(err instanceof NotFoundException);
@@ -435,6 +451,7 @@ describe('PetsService & PetsController (T13 / RF-17, RF-18, RF-19, RF-20)', () =
         deletedAt: null,
         createdAt: new Date(),
         updatedAt: new Date(),
+        createdByClinicId: validClinicId,
       };
       petsDb.push(petWithoutVisits);
 
@@ -448,7 +465,7 @@ describe('PetsService & PetsController (T13 / RF-17, RF-18, RF-19, RF-20)', () =
       };
       tagsDb.push(activeTag);
 
-      const deleted = await petsService.softDelete('pet-no-visits');
+      const deleted = await petsService.softDelete('pet-no-visits', validClinicId);
 
       assert.ok(deleted.deletedAt instanceof Date);
       // El tag debe haber cambiado a INACTIVE
@@ -495,7 +512,7 @@ describe('PetsService & PetsController (T13 / RF-17, RF-18, RF-19, RF-20)', () =
     });
 
     it('findById debe retornar la mascota con datos de dueño y tags incluidos', async () => {
-      const pet = await petsService.findById('pet-uuid-1');
+      const pet = await petsService.findById('pet-uuid-1', validClinicId);
 
       assert.strictEqual(pet.id, 'pet-uuid-1');
       assert.strictEqual(pet.name, 'Max');
@@ -508,7 +525,7 @@ describe('PetsService & PetsController (T13 / RF-17, RF-18, RF-19, RF-20)', () =
     it('findById debe lanzar NotFoundException si no existe o fue eliminada', async () => {
       await assert.rejects(
         async () => {
-          await petsService.findById('pet-uuid-deleted');
+          await petsService.findById('pet-uuid-deleted', validClinicId);
         },
         (err: any) => {
           assert.ok(err instanceof NotFoundException);
@@ -527,7 +544,7 @@ describe('PetsService & PetsController (T13 / RF-17, RF-18, RF-19, RF-20)', () =
         color: 'Dorado oscuro',
       };
 
-      const updated = await petsService.update('pet-uuid-1', updateDto);
+      const updated = await petsService.update('pet-uuid-1', updateDto, validClinicId);
 
       assert.strictEqual(updated.name, 'Maximus');
       assert.strictEqual(updated.reproductiveStatus, ReproductiveStatus.NEUTERED);
@@ -541,7 +558,7 @@ describe('PetsService & PetsController (T13 / RF-17, RF-18, RF-19, RF-20)', () =
 
       await assert.rejects(
         async () => {
-          await petsService.update('pet-uuid-1', updateDto);
+          await petsService.update('pet-uuid-1', updateDto, validClinicId);
         },
         (err: any) => {
           assert.ok(err instanceof NotFoundException);
@@ -554,7 +571,7 @@ describe('PetsService & PetsController (T13 / RF-17, RF-18, RF-19, RF-20)', () =
     it('debe arrojar NotFoundException si la mascota a actualizar no existe', async () => {
       await assert.rejects(
         async () => {
-          await petsService.update('non-existent-pet', { name: 'Otro' });
+          await petsService.update('non-existent-pet', { name: 'Otro' }, validClinicId);
         },
         (err: any) => {
           assert.ok(err instanceof NotFoundException);
@@ -574,7 +591,7 @@ describe('PetsService & PetsController (T13 / RF-17, RF-18, RF-19, RF-20)', () =
         ownerId: 'owner-uuid-1',
       };
 
-      const res = await petsController.create(dto);
+      const res = await petsController.create(validClinicId, dto);
       assert.strictEqual(res.name, 'Balto');
     });
 
@@ -585,12 +602,12 @@ describe('PetsService & PetsController (T13 / RF-17, RF-18, RF-19, RF-20)', () =
     });
 
     it('GET /pets/:id debe delegar a petsService.findById', async () => {
-      const res = await petsController.findById('pet-uuid-1');
+      const res = await petsController.findById(validClinicId, 'pet-uuid-1');
       assert.strictEqual(res.id, 'pet-uuid-1');
     });
 
     it('PATCH /pets/:id debe delegar a petsService.update', async () => {
-      const res = await petsController.update('pet-uuid-1', { name: 'Max Updated' });
+      const res = await petsController.update(validClinicId, 'pet-uuid-1', { name: 'Max Updated' });
       assert.strictEqual(res.name, 'Max Updated');
     });
 

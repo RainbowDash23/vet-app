@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { GrantScope, Prisma, Vaccination } from '@prisma/client';
 import { PaginatedResult } from '@vet-app/shared-types';
@@ -248,15 +249,16 @@ export class VaccinationsService {
   /**
    * Consulta el detalle de una vacunación específica por su identificador.
    */
-  async findById(id: string, clinicId?: string): Promise<VaccinationWithRelations> {
+  async findById(id: string, clinicId: string): Promise<VaccinationWithRelations> {
+    if (!clinicId) {
+      throw new UnauthorizedException('Identificador de clínica no disponible en la sesión');
+    }
+
     const where: Prisma.VaccinationWhereInput = {
       id,
+      clinicId,
       deletedAt: null,
     };
-
-    if (clinicId) {
-      where.clinicId = clinicId;
-    }
 
     const vaccination = await this.prisma.vaccination.findFirst({
       where,

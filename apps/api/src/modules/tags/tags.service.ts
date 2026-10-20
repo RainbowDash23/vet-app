@@ -3,6 +3,7 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  UnauthorizedException,
 } from '@nestjs/common';
 import {
   AccessAction,
@@ -182,7 +183,11 @@ export class TagsService {
    * Conmuta el estado operativo del tag (LOST, DAMAGED, INACTIVE) conservando el historial (RF-32, RF-63).
    * Restringido a tags pertenecientes a la clínica en sesión.
    */
-  async reportStatus(tagId: string, statusDto: ReportTagStatusDto, clinicId?: string): Promise<Tag> {
+  async reportStatus(tagId: string, statusDto: ReportTagStatusDto, clinicId: string): Promise<Tag> {
+    if (!clinicId) {
+      throw new UnauthorizedException('Identificador de clínica no disponible en la sesión');
+    }
+
     const tag = await this.prisma.tag.findFirst({
       where: {
         id: tagId,
@@ -203,7 +208,7 @@ export class TagsService {
       throw new NotFoundException(`Tag con ID '${tagId}' no encontrado o inactivo`);
     }
 
-    if (clinicId && tag.pet) {
+    if (tag.pet) {
       const isOrigin = tag.pet.createdByClinicId === clinicId;
       const hasVisitsInClinic = tag.pet.visits?.some((v: any) => v.clinicId === clinicId);
       if (!isOrigin && !hasVisitsInClinic) {
@@ -223,26 +228,28 @@ export class TagsService {
    * Consulta el historial cronológico de tags vinculados a una mascota ordenados por fecha de creación desc (RF-61).
    * Exige vínculo asistencial en la clínica autenticada o AccessGrant activo.
    */
-  async findByPetId(petId: string, clinicId?: string): Promise<Tag[]> {
-    if (clinicId) {
-      const pet = await this.prisma.pet.findFirst({
-        where: { id: petId, deletedAt: null },
-        include: {
-          visits: { where: { deletedAt: null } },
-        },
-      });
+  async findByPetId(petId: string, clinicId: string): Promise<Tag[]> {
+    if (!clinicId) {
+      throw new UnauthorizedException('Identificador de clínica no disponible en la sesión');
+    }
 
-      if (!pet) {
-        throw new NotFoundException('Mascota no encontrada');
-      }
+    const pet = await this.prisma.pet.findFirst({
+      where: { id: petId, deletedAt: null },
+      include: {
+        visits: { where: { deletedAt: null } },
+      },
+    });
 
-      const isOrigin = pet.createdByClinicId === clinicId;
-      const hasVisitsInClinic = pet.visits?.some((v: any) => v.clinicId === clinicId);
-      const hasGrant = await this.accessGrantsService.hasActiveGrant(petId, clinicId);
+    if (!pet) {
+      throw new NotFoundException('Mascota no encontrada');
+    }
 
-      if (!isOrigin && !hasVisitsInClinic && !hasGrant) {
-        throw new NotFoundException('Tags de mascota no encontrados o no autorizados');
-      }
+    const isOrigin = pet.createdByClinicId === clinicId;
+    const hasVisitsInClinic = pet.visits?.some((v: any) => v.clinicId === clinicId);
+    const hasGrant = await this.accessGrantsService.hasActiveGrant(petId, clinicId);
+
+    if (!isOrigin && !hasVisitsInClinic && !hasGrant) {
+      throw new NotFoundException('Tags de mascota no encontrados o no autorizados');
     }
 
     return this.prisma.tag.findMany({

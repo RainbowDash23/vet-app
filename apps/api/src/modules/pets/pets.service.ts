@@ -3,6 +3,7 @@ import {
   Injectable,
   NotFoundException,
   Optional,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { GrantScope, Pet, PetSex, Prisma, ReproductiveStatus, TagStatus } from '@prisma/client';
 import { PaginatedResult } from '@vet-app/shared-types';
@@ -14,7 +15,7 @@ import { UpdatePetDto } from './dto/update-pet.dto';
 import { filterPetDataByConsent } from './utils/pet-consent.filter';
 
 /**
- * Servicio para la gestión de mascotas en el padrón centralizado (RF-17 a RF-20, RF-59, RF-63).
+ * Servicio para la gestión de mascotas en el padrón centralizado (RF-17 a RF-20, RF-59, RF-60, RF-63).
  */
 @Injectable()
 export class PetsService {
@@ -24,10 +25,15 @@ export class PetsService {
   ) {}
 
   /**
-   * Registra una nueva mascota vinculada a un dueño (RF-17).
+   * Registra una nueva mascota vinculada a un dueño (RF-17, RF-60).
    * Verifica la existencia y estado activo del dueño asociado (RF-18).
+   * Exige vínculo asistencial de la clínica con el dueño (creador o ClinicOwner) y registra provenance.
    */
-  async create(createPetDto: CreatePetDto): Promise<Pet> {
+  async create(createPetDto: CreatePetDto, clinicId: string, userId?: string): Promise<Pet> {
+    if (!clinicId) {
+      throw new UnauthorizedException('Identificador de clínica no disponible en la sesión');
+    }
+
     const owner = await this.prisma.owner.findFirst({
       where: {
         id: createPetDto.ownerId,
@@ -37,6 +43,19 @@ export class PetsService {
 
     if (!owner) {
       throw new NotFoundException('Dueño no encontrado o inactivo');
+    }
+
+    const isOrigin = owner.createdByClinicId === clinicId;
+    let hasClinicOwner = false;
+    if ((this.prisma as any).clinicOwner) {
+      const co = await (this.prisma as any).clinicOwner.findFirst({
+        where: { clinicId, ownerId: createPetDto.ownerId, status: 'ACTIVE' },
+      });
+      if (co) hasClinicOwner = true;
+    }
+
+    if (!isOrigin && !hasClinicOwner) {
+      throw new NotFoundException('Dueño no encontrado o no vinculado a esta clínica');
     }
 
     return this.prisma.pet.create({
@@ -51,6 +70,8 @@ export class PetsService {
         reproductiveStatus: createPetDto.reproductiveStatus ?? ReproductiveStatus.UNKNOWN,
         notes: createPetDto.notes ?? null,
         ownerId: createPetDto.ownerId,
+        createdByClinicId: clinicId,
+        createdById: userId ?? null,
       },
     });
   }
@@ -116,7 +137,11 @@ export class PetsService {
    * Consulta el detalle de una mascota activa por su identificador (RF-17, RF-59).
    * Aplica proyección sanitizada filterPetDataByConsent si no media AccessGrant ni titularidad (RF-59).
    */
-  async findById(id: string, clinicId?: string): Promise<any> {
+  async findById(id: string, clinicId: string): Promise<any> {
+    if (!clinicId) {
+      throw new UnauthorizedException('Identificador de clínica no disponible en la sesión');
+    }
+
     const pet = await this.prisma.pet.findFirst({
       where: {
         id,
@@ -138,20 +163,16 @@ export class PetsService {
     }
 
     let hasFullAccess = false;
-    if (clinicId) {
-      const isOriginClinic = pet.createdByClinicId === clinicId;
-      const hasVisitsInClinic = pet.visits?.some((v: any) => v.clinicId === clinicId);
-      if (isOriginClinic || hasVisitsInClinic) {
-        hasFullAccess = true;
-      } else if (this.accessGrantsService) {
-        hasFullAccess = await this.accessGrantsService.hasActiveGrant(
-          id,
-          clinicId,
-          GrantScope.FULL_HISTORY,
-        );
-      }
-    } else {
+    const isOriginClinic = pet.createdByClinicId === clinicId;
+    const hasVisitsInClinic = pet.visits?.some((v: any) => v.clinicId === clinicId);
+    if (isOriginClinic || hasVisitsInClinic) {
       hasFullAccess = true;
+    } else if (this.accessGrantsService) {
+      hasFullAccess = await this.accessGrantsService.hasActiveGrant(
+        id,
+        clinicId,
+        GrantScope.FULL_HISTORY,
+      );
     }
 
     return filterPetDataByConsent(pet, hasFullAccess);
@@ -161,7 +182,11 @@ export class PetsService {
    * Actualiza los atributos de una mascota activa (RF-63).
    * Restringido a la clínica titular o con vínculo asistencial.
    */
-  async update(id: string, updatePetDto: UpdatePetDto, clinicId?: string): Promise<Pet> {
+  async update(id: string, updatePetDto: UpdatePetDto, clinicId: string): Promise<Pet> {
+    if (!clinicId) {
+      throw new UnauthorizedException('Identificador de clínica no disponible en la sesión');
+    }
+
     const pet = await this.prisma.pet.findFirst({
       where: {
         id,
@@ -178,12 +203,10 @@ export class PetsService {
       throw new NotFoundException('Mascota no encontrada');
     }
 
-    if (clinicId) {
-      const isOriginClinic = pet.createdByClinicId === clinicId;
-      const hasVisitsInClinic = pet.visits?.some((v: any) => v.clinicId === clinicId);
-      if (!isOriginClinic && !hasVisitsInClinic) {
-        throw new NotFoundException('Mascota no encontrada');
-      }
+    const isOriginClinic = pet.createdByClinicId === clinicId;
+    const hasVisitsInClinic = pet.visits?.some((v: any) => v.clinicId === clinicId);
+    if (!isOriginClinic && !hasVisitsInClinic) {
+      throw new NotFoundException('Mascota no encontrada');
     }
 
     if (updatePetDto.ownerId) {
@@ -227,8 +250,25 @@ export class PetsService {
    * Evalúa integridad referencial: bloquea con ConflictException si posee visitas clínicas registradas (RF-19).
    * Ejecuta una transacción atómica para marcar deletedAt y conmutar tags activos a INACTIVE (RF-20).
    */
-  async softDelete(id: string): Promise<Pet> {
-    await this.findById(id);
+  async softDelete(id: string, clinicId: string): Promise<Pet> {
+    if (!clinicId) {
+      throw new UnauthorizedException('Identificador de clínica no disponible en la sesión');
+    }
+
+    const pet = await this.prisma.pet.findFirst({
+      where: { id, deletedAt: null },
+      include: { visits: { where: { deletedAt: null } } },
+    });
+
+    if (!pet) {
+      throw new NotFoundException('Mascota no encontrada');
+    }
+
+    const isOriginClinic = pet.createdByClinicId === clinicId;
+    const hasVisitsInClinic = pet.visits?.some((v: any) => v.clinicId === clinicId);
+    if (!isOriginClinic && !hasVisitsInClinic) {
+      throw new NotFoundException('Mascota no encontrada');
+    }
 
     const visitsCount = await this.prisma.visit.count({
       where: {

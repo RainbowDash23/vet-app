@@ -15,6 +15,7 @@
     "typecheck": "pnpm --filter @vet-app/shared-types build && pnpm --filter @vet-app/api exec tsc --noEmit && pnpm --filter @vet-app/desktop exec tsc --noEmit",
     "test": "pnpm --filter @vet-app/api test && pnpm --filter @vet-app/desktop test",
     "test:e2e": "pnpm --filter @vet-app/api test:e2e",
+    "test:e2e:db": "pnpm --filter @vet-app/api test:e2e:db",
     "test:all": "pnpm test && pnpm test:e2e",
     "audit:security": "node --test apps/desktop/test/unit/security-audit.spec.ts"
   },

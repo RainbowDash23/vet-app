@@ -9,21 +9,25 @@ import {
   Patch,
   Post,
   Query,
+  Req,
+  UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
+import { Request } from 'express';
 import { Pet, Role } from '@prisma/client';
 import { PaginatedResult } from '@vet-app/shared-types';
 import { CurrentClinicId } from '../../common/decorators/clinic.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { AuthenticatedUser } from '../auth/interfaces/jwt-payload.interface';
 import { CreatePetDto } from './dto/create-pet.dto';
 import { SearchPetQueryDto } from './dto/search-pet.dto';
 import { UpdatePetDto } from './dto/update-pet.dto';
 import { PetsService } from './pets.service';
 
 /**
- * Controlador REST para la gestión de mascotas en el padrón centralizado (RF-17 a RF-20).
+ * Controlador REST para la gestión de mascotas en el padrón centralizado (RF-17 a RF-20, RF-60, RF-63).
  */
 @Controller('pets')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -31,12 +35,21 @@ export class PetsController {
   constructor(private readonly petsService: PetsService) {}
 
   /**
-   * Registro de una nueva mascota vinculada a un dueño (RF-17, RF-18).
+   * Registro de una nueva mascota vinculada a un dueño (RF-17, RF-18, RF-60).
+   * Registra createdByClinicId y valida el vínculo asistencial con el dueño.
    */
   @Post()
   @HttpCode(HttpStatus.CREATED)
-  async create(@Body() createPetDto: CreatePetDto): Promise<Pet> {
-    return this.petsService.create(createPetDto);
+  async create(
+    @CurrentClinicId() clinicId: string,
+    @Body() createPetDto: CreatePetDto,
+    @Req() req?: Request & { user?: AuthenticatedUser & { id?: string; userId?: string; sub?: string } },
+  ): Promise<Pet> {
+    if (!clinicId) {
+      throw new UnauthorizedException('Identificador de clínica no disponible en la sesión');
+    }
+    const userId = req?.user?.id || req?.user?.userId || req?.user?.sub;
+    return this.petsService.create(createPetDto, clinicId, userId);
   }
 
   /**
@@ -52,9 +65,12 @@ export class PetsController {
    */
   @Get(':id')
   async findById(
+    @CurrentClinicId() clinicId: string,
     @Param('id') id: string,
-    @CurrentClinicId() clinicId?: string,
   ): Promise<Pet> {
+    if (!clinicId) {
+      throw new UnauthorizedException('Identificador de clínica no disponible en la sesión');
+    }
     return this.petsService.findById(id, clinicId);
   }
 
@@ -64,10 +80,13 @@ export class PetsController {
   @Patch(':id')
   @Roles(Role.RECEPTION, Role.ADMIN)
   async update(
+    @CurrentClinicId() clinicId: string,
     @Param('id') id: string,
     @Body() updatePetDto: UpdatePetDto,
-    @CurrentClinicId() clinicId?: string,
   ): Promise<Pet> {
+    if (!clinicId) {
+      throw new UnauthorizedException('Identificador de clínica no disponible en la sesión');
+    }
     return this.petsService.update(id, updatePetDto, clinicId);
   }
 
@@ -77,7 +96,13 @@ export class PetsController {
    */
   @Delete(':id')
   @Roles(Role.ADMIN)
-  async softDelete(@Param('id') id: string): Promise<Pet> {
-    return this.petsService.softDelete(id);
+  async softDelete(
+    @CurrentClinicId() clinicId: string,
+    @Param('id') id: string,
+  ): Promise<Pet> {
+    if (!clinicId) {
+      throw new UnauthorizedException('Identificador de clínica no disponible en la sesión');
+    }
+    return this.petsService.softDelete(id, clinicId);
   }
 }

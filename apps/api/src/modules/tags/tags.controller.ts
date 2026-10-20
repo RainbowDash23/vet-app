@@ -74,10 +74,13 @@ export class TagsController {
   @Patch(':id/status')
   @Roles(Role.RECEPTION, Role.ADMIN)
   async reportStatus(
+    @CurrentClinicId() clinicId: string,
     @Param('id') id: string,
     @Body() reportStatusDto: ReportTagStatusDto,
-    @CurrentClinicId() clinicId?: string,
   ): Promise<Tag> {
+    if (!clinicId) {
+      throw new UnauthorizedException('Identificador de clínica no disponible en la sesión');
+    }
     return this.tagsService.reportStatus(id, reportStatusDto, clinicId);
   }
 
@@ -86,9 +89,12 @@ export class TagsController {
    */
   @Get('pet/:petId')
   async findByPetId(
+    @CurrentClinicId() clinicId: string,
     @Param('petId') petId: string,
-    @CurrentClinicId() clinicId?: string,
   ): Promise<Tag[]> {
+    if (!clinicId) {
+      throw new UnauthorizedException('Identificador de clínica no disponible en la sesión');
+    }
     return this.tagsService.findByPetId(petId, clinicId);
   }
 }

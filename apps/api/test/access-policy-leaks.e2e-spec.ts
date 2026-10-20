@@ -42,14 +42,26 @@ describe('E2E: Demostración de Fugas de Seguridad y Aislamiento Multi-Tenant (s
   let db: InMemoryDb;
   let vetBToken: string;
   let adminBToken: string;
+  let adminAToken: string;
+  let testContext: any;
   const visitClinicAId = '33333333-aaaa-4333-8333-333333333333';
   const tagClinicAId = 'tag-1111-4111-8111-111111111111';
   const attachmentClinicAId = 'attachment-clinic-a-confidential-001';
 
   before(async () => {
-    const testContext = await createTestApp();
+    testContext = await createTestApp();
     app = testContext.app;
     db = testContext.db;
+
+    // Login Administrador de Clínica A
+    const loginAdminA = await request(app.getHttpServer())
+      .post('/auth/login')
+      .send({
+        email: 'admin@vetapp.com',
+        password: SEED_PASSWORDS.admin,
+      });
+    assert.strictEqual(loginAdminA.status, 200);
+    adminAToken = loginAdminA.body.accessToken;
 
     // Asignar notas clínicas confidenciales a la mascota de Clínica A
     const pet1 = db.pets.find((p) => p.id === PET_1_ID);
@@ -378,6 +390,211 @@ describe('E2E: Demostración de Fugas de Seguridad y Aislamiento Multi-Tenant (s
         res.status,
         404,
         `Brecha multi-tenant: Se esperaba HTTP 404 Not Found pero se obtuvo HTTP ${res.status}. Clínica B pudo registrar una vacunación en la mascota de Clínica A.`,
+      );
+    });
+  });
+
+  describe('Prueba Uno: Alta de dueño en Clínica B, visibilidad y creación de mascota con provenance (RF-60, RF-63)', () => {
+    it('debe registrar createdByClinicId y ClinicOwner al crear dueño con POST /owners, listarlo en GET /owners y permitir crear mascota', async () => {
+      // 1. Clínica B crea un nuevo dueño
+      const createOwnerRes = await request(app.getHttpServer())
+        .post('/owners')
+        .set('Authorization', `Bearer ${adminBToken}`)
+        .send({
+          documentId: 'DOC-B-999999',
+          name: 'Pedro',
+          lastName: 'Pascal',
+          phone: '+593988888888',
+          email: 'pedro.pascal@hospitalvet24.com',
+          address: 'Av. Las Palmas 555',
+        });
+
+      assert.strictEqual(createOwnerRes.status, 201);
+      const ownerBId = createOwnerRes.body.id;
+      assert.ok(ownerBId);
+      assert.strictEqual(createOwnerRes.body.createdByClinicId, CLINIC_B_ID);
+
+      // 2. Clínica B lo ve en GET /owners
+      const listBRes = await request(app.getHttpServer())
+        .get('/owners')
+        .set('Authorization', `Bearer ${adminBToken}`);
+      assert.strictEqual(listBRes.status, 200);
+      const foundInB = listBRes.body.data.some((o: any) => o.id === ownerBId);
+      assert.strictEqual(foundInB, true, 'El dueño creado por Clínica B debe aparecer en su listado GET /owners');
+
+      // 3. Clínica A NO lo ve en GET /owners
+      const listARes = await request(app.getHttpServer())
+        .get('/owners')
+        .set('Authorization', `Bearer ${adminAToken}`);
+      assert.strictEqual(listARes.status, 200);
+      const foundInA = listARes.body.data.some((o: any) => o.id === ownerBId);
+      assert.strictEqual(foundInA, false, 'El dueño creado por Clínica B no debe aparecer en el listado de Clínica A');
+
+      // 4. Clínica B puede crear su mascota
+      const createPetRes = await request(app.getHttpServer())
+        .post('/pets')
+        .set('Authorization', `Bearer ${adminBToken}`)
+        .send({
+          name: 'Thor',
+          species: 'CANINE',
+          breed: 'Pastor Alemán',
+          sex: 'MALE',
+          birthDate: '2023-01-01T00:00:00.000Z',
+          ownerId: ownerBId,
+        });
+      assert.strictEqual(createPetRes.status, 201);
+      assert.strictEqual(createPetRes.body.createdByClinicId, CLINIC_B_ID);
+
+      // 5. Clínica A NO puede crear mascota para un dueño ajeno sin vínculo
+      const createPetByAFails = await request(app.getHttpServer())
+        .post('/pets')
+        .set('Authorization', `Bearer ${adminAToken}`)
+        .send({
+          name: 'Mascota Inválida',
+          species: 'CANINE',
+          birthDate: '2023-01-01T00:00:00.000Z',
+          ownerId: ownerBId,
+        });
+      assert.strictEqual(createPetByAFails.status, 404);
+    });
+  });
+
+  describe('Prueba Dos: POST /owners/lookup no expone datos personales y responde 429 tras límite (RF-60)', () => {
+    it('debe responder { exists: true, pendingConsent: true } sin datos personales y devolver HTTP 429 tras superar el límite', async () => {
+      // 1. Consulta ciega de dueño existente
+      const lookupRes = await request(app.getHttpServer())
+        .post('/owners/lookup')
+        .set('Authorization', `Bearer ${adminAToken}`)
+        .send({ documentId: 'DOC123456' });
+
+      assert.strictEqual(lookupRes.status, 200);
+      assert.deepStrictEqual(lookupRes.body, { exists: true, pendingConsent: true });
+      assert.strictEqual(lookupRes.body.name, undefined);
+      assert.strictEqual(lookupRes.body.email, undefined);
+      assert.strictEqual(lookupRes.body.phone, undefined);
+      assert.strictEqual(lookupRes.body.address, undefined);
+      assert.strictEqual(lookupRes.body.id, undefined);
+
+      // 2. Superar el límite de rate limit (10 peticiones)
+      let rateLimited = false;
+      for (let i = 0; i < 15; i++) {
+        const res = await request(app.getHttpServer())
+          .post('/owners/lookup')
+          .set('Authorization', `Bearer ${adminAToken}`)
+          .send({ documentId: 'DOC123456' });
+
+        if (res.status === 429) {
+          rateLimited = true;
+          break;
+        }
+      }
+      assert.strictEqual(rateLimited, true, 'Debe responder HTTP 429 Too Many Requests tras superar el límite');
+    });
+  });
+
+  describe('Prueba Tres: ClinicOwner se crea únicamente tras escanear el llavero y no antes (RF-28, RF-60)', () => {
+    it('no debe vincular a la clínica B con el dueño antes de escanear el tag, y debe vincularlo tras el escaneo', async () => {
+      // 1. Crear un dueño y mascota en Clínica A con un nuevo tag
+      const pet3Id = '88888888-3333-4333-8333-888888888888';
+      const owner3Id = '88888888-4444-4333-8333-888888888888';
+      const tag3Uid = '04FF11223344';
+
+      db.owners.push({
+        id: owner3Id,
+        documentId: 'DOC-SCAN-TEST',
+        name: 'Ana',
+        lastName: 'García',
+        phone: '+593911111111',
+        email: 'ana.garcia@email.com',
+        address: 'Calle 10',
+        createdByClinicId: CLINIC_A_ID,
+        deletedAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+      db.pets.push({
+        id: pet3Id,
+        name: 'Bobby',
+        species: 'CANINE',
+        breed: 'Poodle',
+        ownerId: owner3Id,
+        createdByClinicId: CLINIC_A_ID,
+        deletedAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+      db.tags.push({
+        id: 'tag-8888-4333-8333-888888888888',
+        uid: tag3Uid,
+        publicCode: 'pub-8888',
+        status: TagStatus.ACTIVE,
+        petId: pet3Id,
+        deletedAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+      if (testContext.syncToPostgres) {
+        await testContext.syncToPostgres();
+      }
+
+      // 2. Clínica B consulta lookup: no crea ClinicOwner
+      const lookup = await request(app.getHttpServer())
+        .post('/owners/lookup')
+        .set('Authorization', `Bearer ${adminBToken}`)
+        .send({ documentId: 'DOC-SCAN-TEST' });
+      assert.strictEqual(lookup.status, 200);
+
+      // Verificar que Clínica B NO lo ve en GET /owners
+      const getOwnersBefore = await request(app.getHttpServer())
+        .get('/owners')
+        .set('Authorization', `Bearer ${vetBToken}`);
+      assert.strictEqual(
+        getOwnersBefore.body.data.some((o: any) => o.id === owner3Id),
+        false,
+        'El dueño no debe aparecer en GET /owners de Clínica B antes del escaneo',
+      );
+
+      // Verificar que GET /owners/:id retorna 404
+      const getOwnerBefore = await request(app.getHttpServer())
+        .get(`/owners/${owner3Id}`)
+        .set('Authorization', `Bearer ${vetBToken}`);
+      assert.strictEqual(getOwnerBefore.status, 404);
+
+      // 3. Clínica B escanea el tag
+      const scanRes = await request(app.getHttpServer())
+        .get(`/tags/resolve/${tag3Uid}`)
+        .set('Authorization', `Bearer ${vetBToken}`);
+      assert.strictEqual(scanRes.status, 200);
+
+      // 4. Ahora Clínica B SÍ tiene el vínculo y puede ver al dueño
+      const getOwnersAfter = await request(app.getHttpServer())
+        .get('/owners')
+        .set('Authorization', `Bearer ${vetBToken}`);
+      assert.strictEqual(
+        getOwnersAfter.body.data.some((o: any) => o.id === owner3Id),
+        true,
+        'El dueño debe aparecer en GET /owners de Clínica B tras escanear el tag',
+      );
+
+      const getOwnerAfter = await request(app.getHttpServer())
+        .get(`/owners/${owner3Id}`)
+        .set('Authorization', `Bearer ${vetBToken}`);
+      assert.strictEqual(getOwnerAfter.status, 200);
+      assert.strictEqual(getOwnerAfter.body.id, owner3Id);
+    });
+  });
+
+  describe('Prueba Cuatro: GET /owners/:id de un dueño sin vínculo devuelve 404 (RF-60)', () => {
+    it('debe denegar con HTTP 404 Not Found cuando una clínica intenta consultar un dueño sin vínculo asistencial', async () => {
+      // OWNER_1_ID pertenece originalmente a Clínica A y Clínica B no lo tiene vinculado
+      const res = await request(app.getHttpServer())
+        .get(`/owners/${OWNER_1_ID}`)
+        .set('Authorization', `Bearer ${adminBToken}`);
+
+      assert.strictEqual(
+        res.status,
+        404,
+        `Se esperaba HTTP 404 Not Found pero se obtuvo HTTP ${res.status}. Clínica B pudo consultar al dueño ajeno sin vínculo.`,
       );
     });
   });

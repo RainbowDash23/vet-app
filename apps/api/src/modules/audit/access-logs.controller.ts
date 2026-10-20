@@ -4,6 +4,7 @@ import {
   Param,
   ParseUUIDPipe,
   Query,
+  UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import { AccessLog, Role } from '@prisma/client';
@@ -30,13 +31,15 @@ export class AccessLogsController {
   @Get()
   @Roles(Role.ADMIN)
   async findAll(
+    @CurrentClinicId() clinicId: string,
     @Query() query?: QueryAccessLogDto,
-    @CurrentClinicId() clinicId?: string,
   ): Promise<PaginatedResult<AccessLog>> {
-    const finalClinicId = clinicId || query?.clinicId;
+    if (!clinicId) {
+      throw new UnauthorizedException('Identificador de clínica no disponible en la sesión');
+    }
     return this.accessLogsService.findAll({
       ...query,
-      clinicId: finalClinicId,
+      clinicId,
     });
   }
 

@@ -298,7 +298,7 @@ describe('ClinicsService & ClinicsController (T10 / RF-7, RF-8, RF-9, RNF-8)', (
       const current = await clinicsController.findCurrent('clinic-uuid-controller');
       assert.strictEqual(current.id, 'clinic-uuid-controller');
 
-      const byId = await clinicsController.findById('clinic-uuid-controller');
+      const byId = await clinicsController.findById('clinic-uuid-controller', 'clinic-uuid-controller');
       assert.strictEqual(byId.id, 'clinic-uuid-controller');
 
       const updated = await clinicsController.updateCurrent('clinic-uuid-controller', {

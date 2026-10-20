@@ -9,8 +9,11 @@ import {
   Patch,
   Post,
   Query,
+  Req,
+  UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
+import { Request } from 'express';
 import { Owner, Role } from '@prisma/client';
 import { Throttle } from '@nestjs/throttler';
 import { PaginatedResult } from '@vet-app/shared-types';
@@ -18,6 +21,7 @@ import { CurrentClinicId } from '../../common/decorators/clinic.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { AuthenticatedUser } from '../auth/interfaces/jwt-payload.interface';
 import { CreateOwnerDto } from './dto/create-owner.dto';
 import { LookupOwnerDto } from './dto/lookup-owner.dto';
 import { SearchOwnerQueryDto } from './dto/search-owner.dto';
@@ -33,13 +37,22 @@ export class OwnersController {
   constructor(private readonly ownersService: OwnersService) {}
 
   /**
-   * Registro de un nuevo dueño en el padrón centralizado (RF-14, RF-15).
+   * Registro de un nuevo dueño en el padrón centralizado (RF-14, RF-15, RF-60).
+   * Registra createdByClinicId y crea el vínculo inicial en ClinicOwner.
    */
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @Roles(Role.RECEPTION, Role.ADMIN)
-  async create(@Body() createOwnerDto: CreateOwnerDto): Promise<Owner> {
-    return this.ownersService.create(createOwnerDto);
+  async create(
+    @CurrentClinicId() clinicId: string,
+    @Body() createOwnerDto: CreateOwnerDto,
+    @Req() req?: Request & { user?: AuthenticatedUser & { id?: string; userId?: string; sub?: string } },
+  ): Promise<Owner> {
+    if (!clinicId) {
+      throw new UnauthorizedException('Identificador de clínica no disponible en la sesión');
+    }
+    const userId = req?.user?.id || req?.user?.userId || req?.user?.sub;
+    return this.ownersService.create(createOwnerDto, clinicId, userId);
   }
 
   /**
@@ -62,9 +75,12 @@ export class OwnersController {
    */
   @Get()
   async findAll(
+    @CurrentClinicId() clinicId: string,
     @Query() query: SearchOwnerQueryDto,
-    @CurrentClinicId() clinicId?: string,
   ): Promise<PaginatedResult<Owner>> {
+    if (!clinicId) {
+      throw new UnauthorizedException('Identificador de clínica no disponible en la sesión');
+    }
     return this.ownersService.findAll(query, clinicId);
   }
 
@@ -73,9 +89,12 @@ export class OwnersController {
    */
   @Get(':id')
   async findById(
+    @CurrentClinicId() clinicId: string,
     @Param('id') id: string,
-    @CurrentClinicId() clinicId?: string,
   ): Promise<Owner> {
+    if (!clinicId) {
+      throw new UnauthorizedException('Identificador de clínica no disponible en la sesión');
+    }
     return this.ownersService.findById(id, clinicId);
   }
 
@@ -85,10 +104,13 @@ export class OwnersController {
   @Patch(':id')
   @Roles(Role.RECEPTION, Role.ADMIN)
   async update(
+    @CurrentClinicId() clinicId: string,
     @Param('id') id: string,
     @Body() updateOwnerDto: UpdateOwnerDto,
-    @CurrentClinicId() clinicId?: string,
   ): Promise<Owner> {
+    if (!clinicId) {
+      throw new UnauthorizedException('Identificador de clínica no disponible en la sesión');
+    }
     return this.ownersService.update(id, updateOwnerDto, clinicId);
   }
 
@@ -98,7 +120,13 @@ export class OwnersController {
    */
   @Delete(':id')
   @Roles(Role.ADMIN)
-  async softDelete(@Param('id') id: string): Promise<Owner> {
-    return this.ownersService.softDelete(id);
+  async softDelete(
+    @CurrentClinicId() clinicId: string,
+    @Param('id') id: string,
+  ): Promise<Owner> {
+    if (!clinicId) {
+      throw new UnauthorizedException('Identificador de clínica no disponible en la sesión');
+    }
+    return this.ownersService.softDelete(id, clinicId);
   }
 }
