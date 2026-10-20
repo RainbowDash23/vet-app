@@ -52,8 +52,8 @@ export class PetsController {
    */
   @Get(':id')
   async findById(
-    @CurrentClinicId() clinicId: string,
     @Param('id') id: string,
+    @CurrentClinicId() clinicId?: string,
   ): Promise<Pet> {
     return this.petsService.findById(id, clinicId);
   }
@@ -64,9 +64,9 @@ export class PetsController {
   @Patch(':id')
   @Roles(Role.RECEPTION, Role.ADMIN)
   async update(
-    @CurrentClinicId() clinicId: string,
     @Param('id') id: string,
     @Body() updatePetDto: UpdatePetDto,
+    @CurrentClinicId() clinicId?: string,
   ): Promise<Pet> {
     return this.petsService.update(id, updatePetDto, clinicId);
   }

@@ -87,9 +87,9 @@ export class AttachmentsController {
   @Delete(':id')
   @Roles(Role.VET, Role.ADMIN)
   async remove(
-    @CurrentClinicId() clinicId: string,
     @Req() req: Request & { user?: AuthenticatedUser & { id?: string; userId?: string; sub?: string } },
     @Param('id') id: string,
+    @CurrentClinicId() clinicId?: string,
   ): Promise<Attachment> {
     const userId = req.user?.id || req.user?.userId || req.user?.sub;
     if (!userId) {

@@ -68,10 +68,10 @@ export class ClinicsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
   async findById(
-    @CurrentClinicId() clinicId: string,
     @Param('id') id: string,
+    @CurrentClinicId() clinicId?: string,
   ): Promise<Clinic> {
-    if (id !== clinicId) {
+    if (clinicId && id !== clinicId) {
       throw new NotFoundException('Clínica no encontrada');
     }
     return this.clinicsService.findById(id);
@@ -85,11 +85,11 @@ export class ClinicsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
   async update(
-    @CurrentClinicId() clinicId: string,
     @Param('id') id: string,
     @Body() updateClinicDto: UpdateClinicDto,
+    @CurrentClinicId() clinicId?: string,
   ): Promise<Clinic> {
-    if (id !== clinicId) {
+    if (clinicId && id !== clinicId) {
       throw new NotFoundException('Clínica no encontrada');
     }
     return this.clinicsService.update(id, updateClinicDto);

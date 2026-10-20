@@ -30,12 +30,13 @@ export class AccessLogsController {
   @Get()
   @Roles(Role.ADMIN)
   async findAll(
-    @CurrentClinicId() clinicId: string,
-    @Query() query: QueryAccessLogDto,
+    @Query() query?: QueryAccessLogDto,
+    @CurrentClinicId() clinicId?: string,
   ): Promise<PaginatedResult<AccessLog>> {
+    const finalClinicId = clinicId || query?.clinicId;
     return this.accessLogsService.findAll({
       ...query,
-      clinicId,
+      clinicId: finalClinicId,
     });
   }
 

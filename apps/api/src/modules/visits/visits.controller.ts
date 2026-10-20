@@ -84,8 +84,8 @@ export class VisitsController {
    */
   @Get(':id')
   async findById(
-    @CurrentClinicId() clinicId: string,
     @Param('id') id: string,
+    @CurrentClinicId() clinicId?: string,
   ): Promise<Visit> {
     return this.visitsService.findById(id, clinicId);
   }

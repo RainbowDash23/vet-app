@@ -62,8 +62,8 @@ export class OwnersController {
    */
   @Get()
   async findAll(
-    @CurrentClinicId() clinicId: string,
     @Query() query: SearchOwnerQueryDto,
+    @CurrentClinicId() clinicId?: string,
   ): Promise<PaginatedResult<Owner>> {
     return this.ownersService.findAll(query, clinicId);
   }
@@ -73,8 +73,8 @@ export class OwnersController {
    */
   @Get(':id')
   async findById(
-    @CurrentClinicId() clinicId: string,
     @Param('id') id: string,
+    @CurrentClinicId() clinicId?: string,
   ): Promise<Owner> {
     return this.ownersService.findById(id, clinicId);
   }
@@ -85,9 +85,9 @@ export class OwnersController {
   @Patch(':id')
   @Roles(Role.RECEPTION, Role.ADMIN)
   async update(
-    @CurrentClinicId() clinicId: string,
     @Param('id') id: string,
     @Body() updateOwnerDto: UpdateOwnerDto,
+    @CurrentClinicId() clinicId?: string,
   ): Promise<Owner> {
     return this.ownersService.update(id, updateOwnerDto, clinicId);
   }
