@@ -46,10 +46,30 @@ export class OwnersService {
   }
 
   /**
-   * Búsqueda paginada estándar de dueños activos (RF-16).
-   * Permite filtrar por documentId, phone, lastName o búsqueda por término general (query).
+   * Consulta ciega de existencia de un dueño por documentId (RF-60).
+   * Retorna { exists: true, pendingConsent: true } si existe, o { exists: false } si no.
+   * Cero exposición de datos personales.
    */
-  async findAll(queryDto: SearchOwnerQueryDto): Promise<PaginatedResult<Owner>> {
+  async lookup(documentId: string): Promise<{ exists: boolean; pendingConsent?: boolean }> {
+    const owner = await this.prisma.owner.findFirst({
+      where: {
+        documentId: documentId.trim(),
+        deletedAt: null,
+      },
+    });
+
+    if (!owner) {
+      return { exists: false };
+    }
+
+    return { exists: true, pendingConsent: true };
+  }
+
+  /**
+   * Búsqueda paginada estándar de dueños activos (RF-16, RF-60).
+   * Restringe los resultados a aquellos con vínculo asistencial en la clínica autenticada (RF-60).
+   */
+  async findAll(queryDto: SearchOwnerQueryDto, clinicId?: string): Promise<PaginatedResult<Owner>> {
     const page = queryDto.page && queryDto.page >= 1 ? queryDto.page : 1;
     const limit = queryDto.limit && queryDto.limit >= 1 ? Math.min(100, queryDto.limit) : 10;
     const skip = (page - 1) * limit;
@@ -58,6 +78,50 @@ export class OwnersService {
     const where: Prisma.OwnerWhereInput = {
       deletedAt: null,
     };
+
+    if (clinicId) {
+      const [clinicOwners, originOwners, originPets, clinicVisits] = await Promise.all([
+        (this.prisma as any).clinicOwner
+          ? (this.prisma as any).clinicOwner.findMany({
+              where: { clinicId, status: 'ACTIVE' },
+              select: { ownerId: true },
+            })
+          : Promise.resolve([]),
+        this.prisma.owner.findMany({
+          where: { createdByClinicId: clinicId, deletedAt: null },
+          select: { id: true },
+        }),
+        this.prisma.pet.findMany({
+          where: { createdByClinicId: clinicId, deletedAt: null },
+          select: { ownerId: true },
+        }),
+        this.prisma.visit.findMany({
+          where: { clinicId, deletedAt: null },
+          select: { petId: true },
+        }),
+      ]);
+
+      let visitOwnerIds: string[] = [];
+      if (clinicVisits && clinicVisits.length > 0) {
+        const visitPetIds = Array.from(new Set(clinicVisits.map((v: any) => v.petId)));
+        const petsWithVisits = await this.prisma.pet.findMany({
+          where: { id: { in: visitPetIds }, deletedAt: null },
+          select: { ownerId: true },
+        });
+        visitOwnerIds = petsWithVisits.map((p: any) => p.ownerId);
+      }
+
+      const linkedOwnerIds = Array.from(
+        new Set([
+          ...(clinicOwners || []).map((co: any) => co.ownerId),
+          ...originOwners.map((o: any) => o.id),
+          ...originPets.map((p: any) => p.ownerId),
+          ...visitOwnerIds,
+        ]),
+      );
+
+      where.id = { in: linkedOwnerIds };
+    }
 
     if (queryDto.documentId) {
       where.documentId = {
@@ -117,10 +181,10 @@ export class OwnersService {
   }
 
   /**
-   * Consulta los datos de un dueño por su identificador único (RF-14).
-   * Lanza NotFoundException si no existe o fue eliminado lógicamente.
+   * Consulta los datos de un dueño por su identificador único (RF-14, RF-60).
+   * Lanza NotFoundException si no existe o no tiene vínculo con la clínica autenticada (RF-60).
    */
-  async findById(id: string): Promise<Owner> {
+  async findById(id: string, clinicId?: string): Promise<Owner> {
     const owner = await this.prisma.owner.findFirst({
       where: {
         id,
@@ -132,15 +196,35 @@ export class OwnersService {
       throw new NotFoundException('Dueño no encontrado');
     }
 
+    if (clinicId) {
+      const isOrigin = owner.createdByClinicId === clinicId;
+      if (!isOrigin) {
+        const [isClinicOwner, hasPetsWithVisits] = await Promise.all([
+          (this.prisma as any).clinicOwner
+            ? (this.prisma as any).clinicOwner.findFirst({
+                where: { clinicId, ownerId: id, status: 'ACTIVE' },
+              })
+            : Promise.resolve(null),
+          this.prisma.visit.findFirst({
+            where: { clinicId, pet: { ownerId: id }, deletedAt: null },
+          }),
+        ]);
+
+        if (!isClinicOwner && !hasPetsWithVisits) {
+          throw new NotFoundException('Dueño no encontrado');
+        }
+      }
+    }
+
     return owner;
   }
 
   /**
-   * Actualiza los datos de filiación o contacto de un dueño activo (RF-14).
-   * Lanza NotFoundException si no existe o fue eliminado.
+   * Actualiza los datos de filiación o contacto de un dueño activo (RF-14, RF-63).
+   * Lanza NotFoundException si no existe o pertenece a otra clínica.
    */
-  async update(id: string, updateOwnerDto: UpdateOwnerDto): Promise<Owner> {
-    await this.findById(id);
+  async update(id: string, updateOwnerDto: UpdateOwnerDto, clinicId?: string): Promise<Owner> {
+    await this.findById(id, clinicId);
 
     return this.prisma.owner.update({
       where: { id },
