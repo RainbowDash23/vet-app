@@ -97,6 +97,7 @@ model Clinic {
   accessGrants AccessGrant[]
   accessLogs   AccessLog[]
   vaccinations Vaccination[]
+  clinicOwners ClinicOwner[]
 
   @@map("clinics")
 }
@@ -144,22 +145,26 @@ model RefreshToken {
 }
 
 model Owner {
-  id         String    @id @default(uuid())
-  documentId String?
-  name       String
-  lastName   String
-  email      String?
-  phone      String
-  address    String?
-  deletedAt  DateTime?
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+  id                 String    @id @default(uuid())
+  documentId         String?
+  name               String
+  lastName           String
+  email              String?
+  phone              String
+  address            String?
+  createdByClinicId  String?
+  createdById        String?
+  deletedAt          DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
-  pets Pet[]
+  pets         Pet[]
+  clinicOwners ClinicOwner[]
 
   @@index([documentId])
   @@index([phone])
   @@index([lastName])
+  @@index([createdByClinicId])
   @@map("owners")
 }
 
@@ -175,6 +180,8 @@ model Pet {
   reproductiveStatus     ReproductiveStatus @default(UNKNOWN)
   notes                  String?
   ownerId                String
+  createdByClinicId      String?
+  createdById            String?
   deletedAt              DateTime?
   createdAt              DateTime           @default(now())
   updatedAt              DateTime           @updatedAt
@@ -189,7 +196,26 @@ model Pet {
 
   @@index([ownerId])
   @@index([name])
+  @@index([createdByClinicId])
   @@map("pets")
+}
+
+model ClinicOwner {
+  id          String    @id @default(uuid())
+  clinicId    String
+  ownerId     String
+  consentedAt DateTime  @default(now())
+  status      String    @default("ACTIVE")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  owner  Owner  @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@unique([clinicId, ownerId])
+  @@index([clinicId])
+  @@index([ownerId])
+  @@map("clinic_owners")
 }
 
 model Tag {
