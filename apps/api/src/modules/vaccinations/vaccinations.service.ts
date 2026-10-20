@@ -36,16 +36,31 @@ export class VaccinationsService {
     vetId: string,
     createDto: CreateVaccinationDto,
   ): Promise<VaccinationWithRelations> {
-    // 1. Valida que la mascota exista y esté activa (deletedAt === null)
+    // 1. Valida que la mascota exista, esté activa (deletedAt === null) y autorizada para la clínica (RF-63)
     const pet = await this.prisma.pet.findFirst({
       where: {
         id: createDto.petId,
         deletedAt: null,
       },
+      include: {
+        visits: { where: { deletedAt: null } },
+      },
     });
 
     if (!pet) {
       throw new NotFoundException('Mascota no encontrada o inactiva');
+    }
+
+    const isOrigin = pet.createdByClinicId === clinicId;
+    const hasVisitsInClinic = pet.visits?.some((v: any) => v.clinicId === clinicId);
+    const hasGrant = await this.accessGrantsService.hasActiveGrant(
+      createDto.petId,
+      clinicId,
+      GrantScope.VACCINES_ONLY,
+    );
+
+    if (!isOrigin && !hasVisitsInClinic && !hasGrant) {
+      throw new NotFoundException('Mascota no encontrada o no autorizada');
     }
 
     // 2. Valida coherencia cronológica de nextDueDate vs appliedAt
