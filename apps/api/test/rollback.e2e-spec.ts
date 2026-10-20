@@ -24,9 +24,11 @@ describe('E2E: Transaccionalidad Atómica y Reversión Total (Rollback) contra P
 
   before(async () => {
     process.env.USE_REAL_DB = 'true';
-    process.env.DATABASE_URL =
-      process.env.DATABASE_URL ||
-      'postgresql://vet_admin:vet_secure_password_123@localhost:5433/vet_app_db?schema=public';
+    const port = process.env.POSTGRES_PORT || '5433';
+    const user = process.env.POSTGRES_USER || 'vet_admin';
+    const password = process.env.POSTGRES_PASSWORD || 'vet_secure_password_123';
+    const dbName = process.env.POSTGRES_DB || 'vet_app_db';
+    process.env.DATABASE_URL = `postgresql://${user}:${password}@localhost:${port}/${dbName}?schema=public`;
 
     const testContext = await createTestApp();
     app = testContext.app;

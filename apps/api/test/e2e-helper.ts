@@ -784,6 +784,9 @@ export async function createTestApp(customDb?: InMemoryDb): Promise<{
   const moduleFixture: TestingModule = await moduleBuilder.compile();
   const app = moduleFixture.createNestApplication();
 
+  const expressApp = app.getHttpAdapter().getInstance();
+  expressApp.set('trust proxy', true);
+
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
