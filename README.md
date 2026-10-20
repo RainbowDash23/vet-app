@@ -61,7 +61,7 @@ El desarrollo ha cubierto el 100% de los requisitos del plan de especificación 
 
 ---
 
-## 3. Riesgos Conocidos y Mitigaciones (specs/spec.md § 4.12.1)
+## 3. Riesgos Conocidos y Mitigaciones ([specs/spec.md](specs/spec.md) § 4.12.1)
 
 ### Riesgo: Escaneo de UID Clonable u Obtenido sin Presencia del Dueño
 - **Descripción:** El escaneo físico de un UID otorga un `AccessGrant` con alcance `FULL_HISTORY` durante 24 horas y vincula a la clínica con el dueño mediante `ClinicOwner`. Si un actor malicioso clona el UID de un llavero o lo escanea sin autorización, obtiene acceso temporal a la historia médica de la mascota.
@@ -78,7 +78,7 @@ El desarrollo ha cubierto el 100% de los requisitos del plan de especificación 
 
 ## 4. Configuración de Variables de Entorno
 
-El repositorio contiene el archivo de referencia [.env.example](file:///C:/Users/josea/orca/projects/vet-app/.env.example). Para crear el entorno local:
+El repositorio contiene el archivo de referencia [.env.example](.env.example). Para crear el entorno local:
 
 ```bash
 cp .env.example .env
@@ -173,3 +173,16 @@ pnpm typecheck
 # Auditoría estática automatizada de seguridad (RNF-1, RNF-2, RNF-3, RNF-6)
 pnpm run audit:security
 ```
+
+---
+
+## 7. Documentación y Trazabilidad Metodológica
+
+El proyecto se rige por la metodología *Spec-Driven Development* (SDD), documentada en los siguientes artefactos:
+
+- **Constitución del Proyecto:** [`docs/constitution.md`](docs/constitution.md) — Principios innegociables de arquitectura, seguridad y desarrollo.
+- **Especificación Formal de Requisitos (EARS):** [`specs/spec.md`](specs/spec.md) — Requisitos funcionales (RF-1 a RF-63), no funcionales (RNF-1 a RNF-12) y matriz de políticas de acceso.
+- **Plan de Arquitectura y Diseño Técnico:** [`specs/plan.md`](specs/plan.md) — Diseño de capas, modelos de base de datos, contratos y flujos.
+- **Descomposición de Tareas:** [`specs/tasks.md`](specs/tasks.md) — Inventario atómico de tareas T01 a T38 con verificación TDD.
+- **Bitácora de Desarrollo:** [`docs/bitacora/`](docs/bitacora/) — Registro histórico y trazabilidad de cada fase de implementación y auditorías.
+
