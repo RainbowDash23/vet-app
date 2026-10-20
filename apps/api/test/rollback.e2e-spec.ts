@@ -1,6 +1,8 @@
 import { describe, it, before, after, beforeEach } from 'node:test';
 import * as assert from 'node:assert';
 import * as crypto from 'node:crypto';
+import * as path from 'node:path';
+import * as fs from 'node:fs';
 import { INestApplication } from '@nestjs/common';
 import { AccessAction, GrantScope, GrantSource, Role, TagStatus } from '@prisma/client';
 import { PrismaService } from '../src/prisma/prisma.service';
@@ -24,9 +26,29 @@ describe('E2E: Transaccionalidad Atómica y Reversión Total (Rollback) contra P
 
   before(async () => {
     process.env.USE_REAL_DB = 'true';
+
+    const rootEnvPath = path.resolve(__dirname, '../../..', '.env');
+    const apiEnvPath = path.resolve(__dirname, '..', '.env');
+    if (typeof process.loadEnvFile === 'function') {
+      if (fs.existsSync(rootEnvPath)) {
+        try {
+          process.loadEnvFile(rootEnvPath);
+        } catch {}
+      } else if (fs.existsSync(apiEnvPath)) {
+        try {
+          process.loadEnvFile(apiEnvPath);
+        } catch {}
+      }
+    }
+
     const port = process.env.POSTGRES_PORT || '5433';
     const user = process.env.POSTGRES_USER || 'vet_admin';
-    const password = process.env.POSTGRES_PASSWORD || 'vet_secure_password_123';
+    const password = process.env.POSTGRES_PASSWORD;
+    if (!password) {
+      throw new Error(
+        'POSTGRES_PASSWORD no está definida en las variables de entorno ni en el archivo .env. Configure POSTGRES_PASSWORD para ejecutar la prueba de reversión contra PostgreSQL real.'
+      );
+    }
     const dbName = process.env.POSTGRES_DB || 'vet_app_db';
     process.env.DATABASE_URL = `postgresql://${user}:${password}@localhost:${port}/${dbName}?schema=public`;
 
