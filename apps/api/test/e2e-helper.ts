@@ -29,6 +29,8 @@ export interface InMemoryDb {
   accessLogs: any[];
   visits: any[];
   visitNotes: any[];
+  attachments: any[];
+  vaccinations: any[];
 }
 
 export const SEED_PASSWORDS = {
@@ -196,6 +198,8 @@ export async function createInitialDb(): Promise<InMemoryDb> {
     accessLogs: [],
     visits: [],
     visitNotes: [],
+    attachments: [],
+    vaccinations: [],
   };
 }
 
@@ -527,6 +531,8 @@ export function createMockPrismaService(db: InMemoryDb): any {
     },
     visit: createTableOps('visits', 'visits'),
     visitNote: createTableOps('visitNotes', 'visitNotes'),
+    attachment: createTableOps('attachments', 'attachments'),
+    vaccination: createTableOps('vaccinations', 'vaccinations'),
     $transaction: async (arg: any) => {
       if (typeof arg === 'function') {
         return await arg(mockPrisma);
