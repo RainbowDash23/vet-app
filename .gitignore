@@ -8,10 +8,9 @@ build/
 out/
 *.tsbuildinfo
 dist-electron/
-# Documentation & Specs
-docs/
-specs/
-firmware/
+**/dist-electron/
+apps/desktop/dist-electron/
+
 # Environment & credentials
 .env
 .env.local
