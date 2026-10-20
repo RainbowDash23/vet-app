@@ -13,6 +13,7 @@ import {
 } from '@nestjs/common';
 import { Pet, Role } from '@prisma/client';
 import { PaginatedResult } from '@vet-app/shared-types';
+import { CurrentClinicId } from '../../common/decorators/clinic.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -50,19 +51,24 @@ export class PetsController {
    * Consulta el detalle de una mascota activa por su identificador.
    */
   @Get(':id')
-  async findById(@Param('id') id: string): Promise<Pet> {
-    return this.petsService.findById(id);
+  async findById(
+    @CurrentClinicId() clinicId: string,
+    @Param('id') id: string,
+  ): Promise<Pet> {
+    return this.petsService.findById(id, clinicId);
   }
 
   /**
-   * Actualización de atributos de una mascota activa.
+   * Actualización de atributos de una mascota activa (RF-63).
    */
   @Patch(':id')
+  @Roles(Role.RECEPTION, Role.ADMIN)
   async update(
+    @CurrentClinicId() clinicId: string,
     @Param('id') id: string,
     @Body() updatePetDto: UpdatePetDto,
   ): Promise<Pet> {
-    return this.petsService.update(id, updatePetDto);
+    return this.petsService.update(id, updatePetDto, clinicId);
   }
 
   /**

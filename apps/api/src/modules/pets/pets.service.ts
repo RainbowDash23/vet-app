@@ -2,20 +2,26 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
-import { Pet, PetSex, Prisma, ReproductiveStatus, TagStatus } from '@prisma/client';
+import { GrantScope, Pet, PetSex, Prisma, ReproductiveStatus, TagStatus } from '@prisma/client';
 import { PaginatedResult } from '@vet-app/shared-types';
 import { PrismaService } from '../../prisma/prisma.service';
+import { AccessGrantsService } from './access-grants.service';
 import { CreatePetDto } from './dto/create-pet.dto';
 import { SearchPetQueryDto } from './dto/search-pet.dto';
 import { UpdatePetDto } from './dto/update-pet.dto';
+import { filterPetDataByConsent } from './utils/pet-consent.filter';
 
 /**
- * Servicio para la gestión de mascotas en el padrón centralizado (RF-17 a RF-20).
+ * Servicio para la gestión de mascotas en el padrón centralizado (RF-17 a RF-20, RF-59, RF-63).
  */
 @Injectable()
 export class PetsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly accessGrantsService?: AccessGrantsService,
+  ) {}
 
   /**
    * Registra una nueva mascota vinculada a un dueño (RF-17).
@@ -107,11 +113,10 @@ export class PetsService {
   }
 
   /**
-   * Consulta el detalle de una mascota activa por su identificador (RF-17).
-   * Incluye datos del dueño y tags asociados no eliminados.
-   * Lanza NotFoundException si no existe o presenta borrado lógico.
+   * Consulta el detalle de una mascota activa por su identificador (RF-17, RF-59).
+   * Aplica proyección sanitizada filterPetDataByConsent si no media AccessGrant ni titularidad (RF-59).
    */
-  async findById(id: string): Promise<Pet> {
+  async findById(id: string, clinicId?: string): Promise<any> {
     const pet = await this.prisma.pet.findFirst({
       where: {
         id,
@@ -122,6 +127,9 @@ export class PetsService {
         tags: {
           where: { deletedAt: null },
         },
+        visits: {
+          where: { deletedAt: null },
+        },
       },
     });
 
@@ -129,15 +137,54 @@ export class PetsService {
       throw new NotFoundException('Mascota no encontrada');
     }
 
-    return pet;
+    let hasFullAccess = false;
+    if (clinicId) {
+      const isOriginClinic = pet.createdByClinicId === clinicId;
+      const hasVisitsInClinic = pet.visits?.some((v: any) => v.clinicId === clinicId);
+      if (isOriginClinic || hasVisitsInClinic) {
+        hasFullAccess = true;
+      } else if (this.accessGrantsService) {
+        hasFullAccess = await this.accessGrantsService.hasActiveGrant(
+          id,
+          clinicId,
+          GrantScope.FULL_HISTORY,
+        );
+      }
+    } else {
+      hasFullAccess = true;
+    }
+
+    return filterPetDataByConsent(pet, hasFullAccess);
   }
 
   /**
-   * Actualiza los atributos de una mascota activa.
-   * Si se incluye ownerId, valida que el nuevo dueño exista y esté activo.
+   * Actualiza los atributos de una mascota activa (RF-63).
+   * Restringido a la clínica titular o con vínculo asistencial.
    */
-  async update(id: string, updatePetDto: UpdatePetDto): Promise<Pet> {
-    await this.findById(id);
+  async update(id: string, updatePetDto: UpdatePetDto, clinicId?: string): Promise<Pet> {
+    const pet = await this.prisma.pet.findFirst({
+      where: {
+        id,
+        deletedAt: null,
+      },
+      include: {
+        visits: {
+          where: { deletedAt: null },
+        },
+      },
+    });
+
+    if (!pet) {
+      throw new NotFoundException('Mascota no encontrada');
+    }
+
+    if (clinicId) {
+      const isOriginClinic = pet.createdByClinicId === clinicId;
+      const hasVisitsInClinic = pet.visits?.some((v: any) => v.clinicId === clinicId);
+      if (!isOriginClinic && !hasVisitsInClinic) {
+        throw new NotFoundException('Mascota no encontrada');
+      }
+    }
 
     if (updatePetDto.ownerId) {
       const owner = await this.prisma.owner.findFirst({
