@@ -4,6 +4,7 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  NotFoundException,
   Param,
   Patch,
   Post,
@@ -60,27 +61,37 @@ export class ClinicsController {
   }
 
   /**
-   * Consulta los datos de una clínica por su identificador único (ID).
-   * Restringido exclusivamente al rol ADMIN general del sistema.
+   * Consulta los datos de una clínica por su identificador único (ID) (RF-63).
+   * Restringe el acceso a la propia clínica del ADMIN en sesión.
    */
   @Get(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
-  async findById(@Param('id') id: string): Promise<Clinic> {
+  async findById(
+    @CurrentClinicId() clinicId: string,
+    @Param('id') id: string,
+  ): Promise<Clinic> {
+    if (id !== clinicId) {
+      throw new NotFoundException('Clínica no encontrada');
+    }
     return this.clinicsService.findById(id);
   }
 
   /**
-   * Actualiza los datos de una clínica por su identificador único (ID).
-   * Restringido exclusivamente al rol ADMIN.
+   * Actualiza los datos de una clínica por su identificador único (ID) (RF-63).
+   * Restringe la modificación a la propia clínica del ADMIN en sesión.
    */
   @Patch(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(Role.ADMIN)
   async update(
+    @CurrentClinicId() clinicId: string,
     @Param('id') id: string,
     @Body() updateClinicDto: UpdateClinicDto,
   ): Promise<Clinic> {
+    if (id !== clinicId) {
+      throw new NotFoundException('Clínica no encontrada');
+    }
     return this.clinicsService.update(id, updateClinicDto);
   }
 }
