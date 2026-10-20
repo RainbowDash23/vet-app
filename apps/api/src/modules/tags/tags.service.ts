@@ -66,15 +66,35 @@ export class TagsService {
       });
     }
 
-    const grant = await this.prisma.$transaction(async () => {
-      await this.accessLogsService.log({
-        petId: tag.petId!,
-        clinicId,
-        userId,
-        action: AccessAction.NFC_SCAN,
-        ipAddress,
-        userAgent,
-      });
+    const grant = await this.prisma.$transaction(async (tx) => {
+      await this.accessLogsService.log(
+        {
+          petId: tag.petId!,
+          clinicId,
+          userId,
+          action: AccessAction.NFC_SCAN,
+          ipAddress,
+          userAgent,
+        },
+        tx,
+      );
+
+      // Vincular al dueño con la clínica en ClinicOwner si aún no está vinculado (Punto Dos)
+      if (tag.pet?.ownerId && (tx as any).clinicOwner) {
+        const existingLink = await (tx as any).clinicOwner.findFirst({
+          where: { clinicId, ownerId: tag.pet.ownerId },
+        });
+        if (!existingLink) {
+          await (tx as any).clinicOwner.create({
+            data: {
+              clinicId,
+              ownerId: tag.pet.ownerId,
+              consentedAt: new Date(),
+              status: 'ACTIVE',
+            },
+          });
+        }
+      }
 
       return this.accessGrantsService.grantAccess(
         tag.petId!,
@@ -82,13 +102,27 @@ export class TagsService {
         GrantSource.NFC_TAP,
         GrantScope.FULL_HISTORY,
         24,
+        tx,
       );
     });
+
+    const sanitizedOwner = tag.pet.owner
+      ? {
+          name: tag.pet.owner.name,
+          lastName: tag.pet.owner.lastName,
+          phone: tag.pet.owner.phone,
+        }
+      : null;
+
+    const sanitizedPet = {
+      ...tag.pet,
+      owner: sanitizedOwner,
+    };
 
     return {
       registered: true as const,
       uid,
-      pet: tag.pet,
+      pet: sanitizedPet,
       hasFullAccess: true,
       grant,
     };
@@ -145,18 +179,36 @@ export class TagsService {
   }
 
   /**
-   * Conmuta el estado operativo del tag (LOST, DAMAGED, INACTIVE) conservando el historial (RF-32).
+   * Conmuta el estado operativo del tag (LOST, DAMAGED, INACTIVE) conservando el historial (RF-32, RF-63).
+   * Restringido a tags pertenecientes a la clínica en sesión.
    */
-  async reportStatus(tagId: string, statusDto: ReportTagStatusDto): Promise<Tag> {
+  async reportStatus(tagId: string, statusDto: ReportTagStatusDto, clinicId?: string): Promise<Tag> {
     const tag = await this.prisma.tag.findFirst({
       where: {
         id: tagId,
         deletedAt: null,
       },
+      include: {
+        pet: {
+          include: {
+            visits: {
+              where: { deletedAt: null },
+            },
+          },
+        },
+      },
     });
 
     if (!tag) {
       throw new NotFoundException(`Tag con ID '${tagId}' no encontrado o inactivo`);
+    }
+
+    if (clinicId && tag.pet) {
+      const isOrigin = tag.pet.createdByClinicId === clinicId;
+      const hasVisitsInClinic = tag.pet.visits?.some((v: any) => v.clinicId === clinicId);
+      if (!isOrigin && !hasVisitsInClinic) {
+        throw new NotFoundException(`Tag con ID '${tagId}' no encontrado o no pertenece a la clínica`);
+      }
     }
 
     return this.prisma.tag.update({
@@ -168,9 +220,31 @@ export class TagsService {
   }
 
   /**
-   * Consulta el historial cronológico de tags vinculados a una mascota ordenados por fecha de creación desc.
+   * Consulta el historial cronológico de tags vinculados a una mascota ordenados por fecha de creación desc (RF-61).
+   * Exige vínculo asistencial en la clínica autenticada o AccessGrant activo.
    */
-  async findByPetId(petId: string): Promise<Tag[]> {
+  async findByPetId(petId: string, clinicId?: string): Promise<Tag[]> {
+    if (clinicId) {
+      const pet = await this.prisma.pet.findFirst({
+        where: { id: petId, deletedAt: null },
+        include: {
+          visits: { where: { deletedAt: null } },
+        },
+      });
+
+      if (!pet) {
+        throw new NotFoundException('Mascota no encontrada');
+      }
+
+      const isOrigin = pet.createdByClinicId === clinicId;
+      const hasVisitsInClinic = pet.visits?.some((v: any) => v.clinicId === clinicId);
+      const hasGrant = await this.accessGrantsService.hasActiveGrant(petId, clinicId);
+
+      if (!isOrigin && !hasVisitsInClinic && !hasGrant) {
+        throw new NotFoundException('Tags de mascota no encontrados o no autorizados');
+      }
+    }
+
     return this.prisma.tag.findMany({
       where: {
         petId,

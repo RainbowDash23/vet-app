@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { AccessLog, Role } from '@prisma/client';
 import { PaginatedResult } from '@vet-app/shared-types';
+import { CurrentClinicId } from '../../common/decorators/clinic.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -15,7 +16,7 @@ import { AccessLogsService } from './access-logs.service';
 import { QueryAccessLogDto } from './dto/query-access-log.dto';
 
 /**
- * Controlador REST para la consulta de la bitácora de auditoría inmutable (RF-25, RF-37, RNF-7).
+ * Controlador REST para la consulta de la bitácora de auditoría inmutable (RF-25, RF-37, RF-62, RNF-7).
  */
 @Controller('audit/access-logs')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -23,13 +24,19 @@ export class AccessLogsController {
   constructor(private readonly accessLogsService: AccessLogsService) {}
 
   /**
-   * Consulta global y paginada de trazas de auditoría.
+   * Consulta global y paginada de trazas de auditoría de la clínica activa (RF-25, RF-62).
    * Restringido exclusivamente al rol ADMIN.
    */
   @Get()
   @Roles(Role.ADMIN)
-  async findAll(@Query() query: QueryAccessLogDto): Promise<PaginatedResult<AccessLog>> {
-    return this.accessLogsService.findAll(query);
+  async findAll(
+    @CurrentClinicId() clinicId: string,
+    @Query() query: QueryAccessLogDto,
+  ): Promise<PaginatedResult<AccessLog>> {
+    return this.accessLogsService.findAll({
+      ...query,
+      clinicId,
+    });
   }
 
   /**

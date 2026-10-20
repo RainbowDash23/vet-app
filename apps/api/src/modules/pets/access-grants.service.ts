@@ -13,6 +13,7 @@ export class AccessGrantsService {
   /**
    * Genera o extiende un AccessGrant válido por exactamente durationHours (por defecto 24 horas).
    * Ante lecturas físicas NFC_TAP o derivaciones, otorga alcance FULL_HISTORY (RF-22).
+   * Soporta inyección opcional de cliente transaccional tx.
    */
   async grantAccess(
     petId: string,
@@ -20,8 +21,10 @@ export class AccessGrantsService {
     source: GrantSource = GrantSource.NFC_TAP,
     scope: GrantScope = GrantScope.FULL_HISTORY,
     durationHours = 24,
+    tx?: any,
   ): Promise<AccessGrant> {
-    const pet = await this.prisma.pet.findFirst({
+    const client = tx || this.prisma;
+    const pet = await client.pet.findFirst({
       where: {
         id: petId,
         deletedAt: null,
@@ -35,7 +38,7 @@ export class AccessGrantsService {
     const now = new Date();
     const expiresAt = new Date(now.getTime() + durationHours * 3600 * 1000);
 
-    const existingGrant = await this.prisma.accessGrant.findFirst({
+    const existingGrant = await client.accessGrant.findFirst({
       where: {
         petId,
         clinicId,
@@ -46,7 +49,7 @@ export class AccessGrantsService {
     });
 
     if (existingGrant) {
-      return this.prisma.accessGrant.update({
+      return client.accessGrant.update({
         where: { id: existingGrant.id },
         data: {
           expiresAt,
@@ -56,7 +59,7 @@ export class AccessGrantsService {
       });
     }
 
-    return this.prisma.accessGrant.create({
+    return client.accessGrant.create({
       data: {
         petId,
         clinicId,

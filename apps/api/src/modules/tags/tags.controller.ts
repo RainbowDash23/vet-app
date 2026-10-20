@@ -13,6 +13,7 @@ import {
 } from '@nestjs/common';
 import { Role, Tag } from '@prisma/client';
 import { Request } from 'express';
+import { CurrentClinicId } from '../../common/decorators/clinic.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -22,7 +23,7 @@ import { ReportTagStatusDto } from './dto/report-tag-status.dto';
 import { TagsService } from './tags.service';
 
 /**
- * Controlador REST para el subsistema de tags NFC e identificación (RF-28 a RF-32, RF-56).
+ * Controlador REST para el subsistema de tags NFC e identificación (RF-28 a RF-32, RF-56, RF-61, RF-63).
  */
 @Controller('tags')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -67,23 +68,27 @@ export class TagsController {
   }
 
   /**
-   * Actualiza el estado operativo de un tag NFC (RF-32).
-   * Restringido a los roles RECEPTION y ADMIN.
+   * Actualiza el estado operativo de un tag NFC (RF-32, RF-63).
+   * Restringido a los roles RECEPTION y ADMIN de la clínica titular.
    */
   @Patch(':id/status')
   @Roles(Role.RECEPTION, Role.ADMIN)
   async reportStatus(
+    @CurrentClinicId() clinicId: string,
     @Param('id') id: string,
     @Body() reportStatusDto: ReportTagStatusDto,
   ): Promise<Tag> {
-    return this.tagsService.reportStatus(id, reportStatusDto);
+    return this.tagsService.reportStatus(id, reportStatusDto, clinicId);
   }
 
   /**
-   * Consulta el historial cronológico de tags asignados a una mascota.
+   * Consulta el historial cronológico de tags asignados a una mascota (RF-61).
    */
   @Get('pet/:petId')
-  async findByPetId(@Param('petId') petId: string): Promise<Tag[]> {
-    return this.tagsService.findByPetId(petId);
+  async findByPetId(
+    @CurrentClinicId() clinicId: string,
+    @Param('petId') petId: string,
+  ): Promise<Tag[]> {
+    return this.tagsService.findByPetId(petId, clinicId);
   }
 }

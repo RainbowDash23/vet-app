@@ -17,12 +17,15 @@ export class AccessLogsService {
   /**
    * Inserta de forma atómica y secuencial una nueva traza de auditoría en access_logs (RF-25, RF-37).
    * Permite que clinicId y userId sean null o undefined (para accesos públicos de emergencia).
+   * Soporta inyección opcional de cliente transaccional tx.
    *
    * @param createDto Datos de la traza de auditoría a registrar.
+   * @param tx Cliente transaccional opcional de Prisma.
    * @returns La entidad AccessLog persistida.
    */
-  async log(createDto: CreateAccessLogDto): Promise<AccessLog> {
-    return this.prisma.accessLog.create({
+  async log(createDto: CreateAccessLogDto, tx?: any): Promise<AccessLog> {
+    const client = tx || this.prisma;
+    return client.accessLog.create({
       data: {
         petId: createDto.petId,
         clinicId: createDto.clinicId ?? null,
