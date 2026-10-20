@@ -68,25 +68,41 @@ export class AttachmentsService {
     // 1. Valida el tipo MIME y tamaño
     this.validateFile(file);
 
-    // 2. Si se proporciona petId, valida existencia y actividad
+    // 2. Si se proporciona petId, valida existencia, actividad y autorización
     if (dto.petId) {
       const pet = await this.prisma.pet.findFirst({
         where: {
           id: dto.petId,
           deletedAt: null,
         },
+        include: {
+          visits: { where: { deletedAt: null } },
+        },
       });
 
       if (!pet) {
         throw new NotFoundException('Mascota no encontrada o inactiva');
       }
+
+      const isOrigin = pet.createdByClinicId === clinicId;
+      const hasVisitsInClinic = pet.visits?.some((v: any) => v.clinicId === clinicId);
+      const hasGrant = await this.accessGrantsService.hasActiveGrant(
+        dto.petId,
+        clinicId,
+        GrantScope.FULL_HISTORY,
+      );
+
+      if (!isOrigin && !hasVisitsInClinic && !hasGrant) {
+        throw new NotFoundException('Mascota no encontrada o no autorizada');
+      }
     }
 
-    // 3. Si se proporciona visitId, valida existencia y actividad
+    // 3. Si se proporciona visitId, valida existencia y actividad en la clínica
     if (dto.visitId) {
       const visit = await this.prisma.visit.findFirst({
         where: {
           id: dto.visitId,
+          clinicId,
           deletedAt: null,
         },
       });
@@ -181,18 +197,44 @@ export class AttachmentsService {
   }
 
   /**
-   * Borrado lógico de un archivo adjunto clínico.
+   * Borrado lógico de un archivo adjunto clínico (RF-49, RF-63).
+   * Restringido a la clínica propietaria de la atención o paciente.
    */
-  async softDelete(attachmentId: string, _userId: string): Promise<Attachment> {
+  async softDelete(attachmentId: string, _userId: string, clinicId?: string): Promise<Attachment> {
     const attachment = await this.prisma.attachment.findFirst({
       where: {
         id: attachmentId,
         deletedAt: null,
       },
+      include: {
+        pet: {
+          include: {
+            visits: { where: { deletedAt: null } },
+          },
+        },
+        visit: true,
+      },
     });
 
     if (!attachment) {
       throw new NotFoundException('Archivo adjunto no encontrado');
+    }
+
+    if (clinicId) {
+      let isAuthorized = false;
+      if (attachment.visit && attachment.visit.clinicId === clinicId) {
+        isAuthorized = true;
+      } else if (attachment.pet) {
+        const isOrigin = attachment.pet.createdByClinicId === clinicId;
+        const hasVisitsInClinic = attachment.pet.visits?.some((v: any) => v.clinicId === clinicId);
+        if (isOrigin || hasVisitsInClinic) {
+          isAuthorized = true;
+        }
+      }
+
+      if (!isAuthorized) {
+        throw new NotFoundException('Archivo adjunto no encontrado');
+      }
     }
 
     return this.prisma.attachment.update({

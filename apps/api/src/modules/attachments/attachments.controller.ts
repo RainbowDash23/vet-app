@@ -82,11 +82,12 @@ export class AttachmentsController {
   }
 
   /**
-   * Borrado lógico de archivo adjunto clínico.
+   * Borrado lógico de archivo adjunto clínico (RF-49, RF-63).
    */
   @Delete(':id')
   @Roles(Role.VET, Role.ADMIN)
   async remove(
+    @CurrentClinicId() clinicId: string,
     @Req() req: Request & { user?: AuthenticatedUser & { id?: string; userId?: string; sub?: string } },
     @Param('id') id: string,
   ): Promise<Attachment> {
@@ -95,6 +96,6 @@ export class AttachmentsController {
       throw new UnauthorizedException('Identificador de usuario no disponible en la sesión');
     }
 
-    return this.attachmentsService.softDelete(id, userId);
+    return this.attachmentsService.softDelete(id, userId, clinicId);
   }
 }
