@@ -1,39 +1,46 @@
 import { Injectable } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
 import { ThrottlerGuard } from '@nestjs/throttler';
 
 /**
  * Guardia de limitación de tasa (rate limiting) que rastrea los intentos por usuario autenticado (RF-60).
- * Extrae el identificador del usuario desde req.user o decodificando la cabecera Authorization: Bearer.
- * Si la petición no cuenta con credenciales de usuario, recurre a la IP de origen.
+ * Exige que el JWT esté criptográficamente verificado y no meramente decodificado.
+ * Si el token es inválido, expirado, forjado o no existe, recurre de forma segura a la IP de origen como respaldo.
  */
 @Injectable()
 export class UserThrottlerGuard extends ThrottlerGuard {
+  private readonly jwtVerifier = new JwtService();
+
   protected async getTracker(req: Record<string, any>): Promise<string> {
+    // 1. Si req.user ya fue poblado y verificado por JwtAuthGuard en la tubería
     const user = req.user;
     const userId = user?.userId || user?.id || user?.sub;
     if (userId) {
       return `user-${userId}`;
     }
 
-    // Si req.user aún no está poblado por ejecutarse antes de JwtAuthGuard,
-    // extraemos el identificador de usuario directamente del token Bearer si está presente
+    // 2. Si req.user aún no está poblado, extraemos y verificamos criptográficamente el token Bearer
     const authHeader = req.headers?.authorization;
     if (typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) {
       const token = authHeader.substring(7).trim();
-      const parts = token.split('.');
-      if (parts.length === 3) {
+      if (token) {
         try {
-          const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf-8'));
-          const tokenUserId = payload.userId || payload.sub || payload.id || payload.email;
-          if (tokenUserId) {
-            return `user-${tokenUserId}`;
+          const secret = process.env.JWT_SECRET;
+          if (secret) {
+            const verifiedPayload = this.jwtVerifier.verify(token, { secret });
+            const tokenUserId = verifiedPayload?.userId || verifiedPayload?.sub || verifiedPayload?.id;
+            if (tokenUserId) {
+              return `user-${tokenUserId}`;
+            }
           }
         } catch {
-          // Si el token no es decodificable, continuar al fallback
+          // Token con firma inválida, forjada, alterada o expirada:
+          // Se descarta de inmediato la identidad y se respalda en la IP
         }
       }
     }
 
+    // 3. Respaldo por dirección IP
     return super.getTracker(req);
   }
 }
