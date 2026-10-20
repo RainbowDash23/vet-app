@@ -860,8 +860,8 @@ describe('E2E: Demostración de Fugas de Seguridad y Aislamiento Multi-Tenant (s
     });
   });
 
-  describe('Prueba Ocho: Re-escaneo tras revocación o vencimiento reactiva vínculo con vencimiento y traza (RF-28, RF-60)', () => {
-    it('debe reactivar el vínculo ClinicOwner con nuevo vencimiento a 30 días y registrar traza NFC_SCAN en AccessLog', async () => {
+  describe('Prueba Ocho: ClinicOwner con status REVOKED bloquea escaneo (403 sin grant y con traza) y vínculo vencido se renueva (RF-28, RF-60)', () => {
+    it('un ClinicOwner REVOKED bloquea el escaneo con 403 y registra en AccessLog sin emitir AccessGrant; un vínculo vencido se renueva', async () => {
       const owner7Id = '99999999-7777-7777-8777-999999999997';
       const pet7Id = '99999999-7777-7777-8777-999999999998';
       const tag7Uid = '047777777777';
@@ -914,21 +914,17 @@ describe('E2E: Demostración de Fugas de Seguridad y Aislamiento Multi-Tenant (s
         await testContext.syncToPostgres();
       }
 
-      // Antes del re-escaneo: Clínica B ve 404
-      const resBefore = await request(app.getHttpServer())
-        .get(`/owners/${owner7Id}`)
-        .set('Authorization', `Bearer ${vetBToken}`);
-      assert.strictEqual(resBefore.status, 404, 'Dueño con vínculo REVOKED debe ser 404');
-
-      const logsBeforeCount = db.accessLogs.length;
-
-      // Re-escaneo del tag NFC
+      // Escaneo de tag de un dueño REVOKED: DEBE BLOQUEAR CON 403
       const scanRes = await request(app.getHttpServer())
         .get(`/tags/resolve/${tag7Uid}`)
         .set('Authorization', `Bearer ${vetBToken}`);
-      assert.strictEqual(scanRes.status, 200);
+      assert.strictEqual(
+        scanRes.status,
+        403,
+        `Se esperaba 403 Forbidden por vínculo REVOKED pero se obtuvo ${scanRes.status}`,
+      );
 
-      // Traza en AccessLog y estado de ClinicOwner
+      // Traza en AccessLog debe registrarse
       if (testContext.isRealDb) {
         const latestLog = await testContext.prisma.accessLog.findFirst({
           where: { petId: pet7Id, clinicId: CLINIC_B_ID, action: AccessAction.NFC_SCAN },
@@ -936,39 +932,94 @@ describe('E2E: Demostración de Fugas de Seguridad y Aislamiento Multi-Tenant (s
         });
         assert.ok(latestLog, 'Debe existir la traza en AccessLog en PostgreSQL');
         assert.strictEqual(latestLog.action, AccessAction.NFC_SCAN);
-        assert.strictEqual(latestLog.petId, pet7Id);
-        assert.strictEqual(latestLog.clinicId, CLINIC_B_ID);
 
-        const updatedLink = await (testContext.prisma as any).clinicOwner.findFirst({
-          where: { clinicId: CLINIC_B_ID, ownerId: owner7Id },
+        // NO debe existir AccessGrant activo para Clínica B y pet7
+        const grant = await testContext.prisma.accessGrant.findFirst({
+          where: { petId: pet7Id, clinicId: CLINIC_B_ID },
         });
-        assert.ok(updatedLink, 'Debe existir el vínculo en PostgreSQL');
-        assert.strictEqual(updatedLink.status, 'ACTIVE');
-        assert.strictEqual(updatedLink.revokedAt, null);
-        assert.ok(new Date(updatedLink.expiresAt) > new Date(Date.now() + 20 * 86400000));
+        assert.strictEqual(grant, null, 'No debe emitirse AccessGrant ante status REVOKED');
       } else {
-        assert.strictEqual(db.accessLogs.length, logsBeforeCount + 1);
-        const latestLog = db.accessLogs[db.accessLogs.length - 1];
-        assert.strictEqual(latestLog.action, AccessAction.NFC_SCAN);
-        assert.strictEqual(latestLog.petId, pet7Id);
-        assert.strictEqual(latestLog.clinicId, CLINIC_B_ID);
-
-        const updatedLink = db.clinicOwners.find(
-          (co: any) => co.clinicId === CLINIC_B_ID && co.ownerId === owner7Id,
+        const latestLog = db.accessLogs.find(
+          (l: any) => l.petId === pet7Id && l.clinicId === CLINIC_B_ID && l.action === AccessAction.NFC_SCAN,
         );
-        assert.ok(updatedLink, 'Debe existir el vínculo');
-        assert.strictEqual(updatedLink.status, 'ACTIVE');
-        assert.strictEqual(updatedLink.revokedAt, null);
-        assert.ok(updatedLink.expiresAt > new Date(Date.now() + 20 * 86400000));
+        assert.ok(latestLog, 'Debe existir la traza en AccessLog');
+        const grant = db.accessGrants.find(
+          (g: any) => g.petId === pet7Id && g.clinicId === CLINIC_B_ID,
+        );
+        assert.strictEqual(grant, undefined, 'No debe emitirse AccessGrant ante status REVOKED');
       }
 
-      // Tras re-escaneo: Clínica B puede consultar al dueño con proyección mínima
-      const resAfter = await request(app.getHttpServer())
-        .get(`/owners/${owner7Id}`)
+      // Caso Vínculo Vencido: se renueva por 30 días
+      const owner8Id = '99999999-8888-8888-8888-999999999998';
+      const pet8Id = '99999999-8888-8888-8888-999999999999';
+      const tag8Uid = '048888888888';
+
+      db.owners.push({
+        id: owner8Id,
+        documentId: 'DOC-EXPIRED-888',
+        name: 'Roberto',
+        lastName: 'Diaz',
+        phone: '+593988888888',
+        createdByClinicId: CLINIC_A_ID,
+        deletedAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+      db.pets.push({
+        id: pet8Id,
+        name: 'Max',
+        species: 'CANINE',
+        breed: 'Pastor',
+        ownerId: owner8Id,
+        createdByClinicId: CLINIC_A_ID,
+        deletedAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+      db.tags.push({
+        id: 'tag-9999-8888-8888-999999999999',
+        uid: tag8Uid,
+        publicCode: 'pub-9999-888',
+        status: TagStatus.ACTIVE,
+        petId: pet8Id,
+        deletedAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+      db.clinicOwners.push({
+        id: 'co-expired-888',
+        clinicId: CLINIC_B_ID,
+        ownerId: owner8Id,
+        consentedAt: new Date(Date.now() - 40 * 86400000),
+        expiresAt: new Date(Date.now() - 10000), // Expirado hace 10s
+        status: 'ACTIVE',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+      if (testContext.syncToPostgres) {
+        await testContext.syncToPostgres();
+      }
+
+      const scanExpiredRes = await request(app.getHttpServer())
+        .get(`/tags/resolve/${tag8Uid}`)
         .set('Authorization', `Bearer ${vetBToken}`);
-      assert.strictEqual(resAfter.status, 200);
-      assert.strictEqual(resAfter.body.name, 'Elena');
-      assert.strictEqual(resAfter.body.documentId, undefined);
+      assert.strictEqual(scanExpiredRes.status, 200, 'Escaneo con vínculo vencido debe renovar y responder 200');
+
+      if (testContext.isRealDb) {
+        const renewed = await (testContext.prisma as any).clinicOwner.findFirst({
+          where: { clinicId: CLINIC_B_ID, ownerId: owner8Id },
+        });
+        assert.ok(renewed);
+        assert.strictEqual(renewed.status, 'ACTIVE');
+        assert.ok(new Date(renewed.expiresAt) > new Date(Date.now() + 25 * 86400000));
+      } else {
+        const renewed = db.clinicOwners.find(
+          (co: any) => co.clinicId === CLINIC_B_ID && co.ownerId === owner8Id,
+        );
+        assert.ok(renewed);
+        assert.strictEqual(renewed.status, 'ACTIVE');
+        assert.ok(renewed.expiresAt > new Date(Date.now() + 25 * 86400000));
+      }
     });
   });
 });

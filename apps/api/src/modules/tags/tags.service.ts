@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import {
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
   UnauthorizedException,
@@ -9,6 +10,7 @@ import {
   AccessAction,
   GrantScope,
   GrantSource,
+  Prisma,
   Tag,
   TagStatus,
 } from '@prisma/client';
@@ -67,7 +69,28 @@ export class TagsService {
       });
     }
 
-    const grant = await this.prisma.$transaction(async (tx) => {
+    // Un ClinicOwner con status REVOKED bloquea el escaneo (403 sin emitir grant) y registra el intento en AccessLog
+    if (tag.pet.ownerId) {
+      const existingLink = await this.prisma.clinicOwner.findUnique({
+        where: {
+          clinicId_ownerId: { clinicId, ownerId: tag.pet.ownerId },
+        },
+      });
+
+      if (existingLink?.status === 'REVOKED') {
+        await this.accessLogsService.log({
+          petId: tag.petId,
+          clinicId,
+          userId,
+          action: AccessAction.NFC_SCAN,
+          ipAddress,
+          userAgent,
+        });
+        throw new ForbiddenException('El acceso para esta clínica ha sido revocado por el dueño o administración');
+      }
+    }
+
+    const grant = await this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       await this.accessLogsService.log(
         {
           petId: tag.petId!,
@@ -80,33 +103,41 @@ export class TagsService {
         tx,
       );
 
-      // Vincular al dueño con la clínica en ClinicOwner (Punto Dos y Punto Cuatro)
-      if (tag.pet?.ownerId && (tx as any).clinicOwner) {
-        const existingLink = await (tx as any).clinicOwner.findFirst({
-          where: { clinicId, ownerId: tag.pet.ownerId },
+      // Vincular o renovar al dueño con la clínica en ClinicOwner (Punto Uno y Punto Dos)
+      if (tag.pet?.ownerId) {
+        const existingLink = await tx.clinicOwner.findUnique({
+          where: { clinicId_ownerId: { clinicId, ownerId: tag.pet.ownerId } },
         });
-        const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // Vencimiento a 30 días
+
+        const thirtyDays = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
         if (!existingLink) {
-          await (tx as any).clinicOwner.create({
-            data: {
+          // Usa upsert para evitar la carrera con @@unique([clinicId, ownerId])
+          await tx.clinicOwner.upsert({
+            where: {
+              clinicId_ownerId: { clinicId, ownerId: tag.pet.ownerId },
+            },
+            create: {
               clinicId,
               ownerId: tag.pet.ownerId,
               consentedAt: new Date(),
-              expiresAt,
+              expiresAt: thirtyDays,
               status: 'ACTIVE',
             },
+            update: {},
           });
-        } else {
-          // Re-escaneo tras revocación o vencimiento reactiva el vínculo con nuevo consentimiento y vencimiento (Punto Cuatro)
-          await (tx as any).clinicOwner.update({
-            where: { id: existingLink.id },
-            data: {
-              status: 'ACTIVE',
-              revokedAt: null,
-              consentedAt: new Date(),
-              expiresAt,
-            },
-          });
+        } else if (existingLink.status === 'ACTIVE') {
+          // Un vínculo ACTIVE con expiresAt nulo no se modifica.
+          // Un vínculo vencido se renueva por 30 días.
+          if (existingLink.expiresAt !== null && new Date(existingLink.expiresAt) <= new Date()) {
+            await tx.clinicOwner.update({
+              where: { id: existingLink.id },
+              data: {
+                consentedAt: new Date(),
+                expiresAt: thirtyDays,
+              },
+            });
+          }
         }
       }
 

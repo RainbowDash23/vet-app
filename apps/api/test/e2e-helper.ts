@@ -227,6 +227,13 @@ function matchCriteria(item: any, where: any): boolean {
 
     if (condition === undefined) continue;
 
+    if (key === 'clinicId_ownerId' && typeof condition === 'object' && condition !== null) {
+      if (item.clinicId !== condition.clinicId || item.ownerId !== condition.ownerId) {
+        return false;
+      }
+      continue;
+    }
+
     if (key === 'OR' && Array.isArray(condition)) {
       const orMatched = condition.some((subWhere: any) => matchCriteria(item, subWhere));
       if (!orMatched) return false;
@@ -510,6 +517,30 @@ export function createMockPrismaService(db: InMemoryDb): any {
       const updated = {
         ...list[index],
         ...args.data,
+        updatedAt: new Date(),
+      };
+      list[index] = updated;
+      return enrichItem(updated, tableName, args.include, args.select);
+    },
+    upsert: async (args: any = {}) => {
+      const list = db[tableKey];
+      const index = list.findIndex((item: any) => matchCriteria(item, args.where));
+      if (index === -1) {
+        const newItem = {
+          id: args.create?.id || crypto.randomUUID(),
+          deletedAt: args.create?.deletedAt !== undefined ? args.create.deletedAt : null,
+          revokedAt: args.create?.revokedAt !== undefined ? args.create.revokedAt : null,
+          closedAt: args.create?.closedAt !== undefined ? args.create.closedAt : null,
+          ...args.create,
+          createdAt: args.create?.createdAt || new Date(),
+          updatedAt: args.create?.updatedAt || new Date(),
+        };
+        db[tableKey].push(newItem);
+        return enrichItem(newItem, tableName, args.include, args.select);
+      }
+      const updated = {
+        ...list[index],
+        ...args.update,
         updatedAt: new Date(),
       };
       list[index] = updated;

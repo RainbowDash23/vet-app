@@ -2,7 +2,7 @@ import { describe, it, beforeEach } from 'node:test';
 import * as assert from 'node:assert';
 import { validate } from 'class-validator';
 import { plainToInstance } from 'class-transformer';
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { AccessAction, GrantScope, GrantSource, Role, TagStatus } from '@prisma/client';
 import { ROLES_KEY } from '../../src/common/decorators/roles.decorator';
 import { PrismaService } from '../../src/prisma/prisma.service';
@@ -78,6 +78,13 @@ describe('TagsService & TagsController (T16 / RF-28, RF-29, RF-30, RF-31, RF-32,
           visits: [],
           deletedAt: null,
         }),
+      },
+      clinicOwner: {
+        findUnique: async () => null,
+        findFirst: async () => null,
+        create: async (args: any) => ({ id: 'co-created', ...args.data }),
+        update: async (args: any) => ({ id: args.where.id, ...args.data }),
+        upsert: async (args: any) => ({ id: 'co-upserted', ...args.create }),
       },
       $transaction: async (cb: any) => {
         if (typeof cb === 'function') {
@@ -268,6 +275,211 @@ describe('TagsService & TagsController (T16 / RF-28, RF-29, RF-30, RF-31, RF-32,
         assert.strictEqual(response.registered, false);
         assert.strictEqual(response.uid, sampleUid);
       }
+    });
+    it('debe bloquear con HTTP 403 Forbidden y registrar intento en AccessLog si el ClinicOwner tiene status REVOKED (sin emitir AccessGrant)', async () => {
+      let loggedData: any = null;
+      let grantCalled = false;
+
+      mockAccessLogsService.log = async (data: any) => {
+        loggedData = data;
+        return { id: 'log-revoked', ...data, timestamp: new Date() };
+      };
+
+      mockAccessGrantsService.grantAccess = async () => {
+        grantCalled = true;
+        return {} as any;
+      };
+
+      const existingTag: MockTag = {
+        id: 'tag-uuid-revoked',
+        uid: sampleUid,
+        publicCode: 'pub-code-revoked',
+        status: TagStatus.ACTIVE,
+        petId: samplePetId,
+        deletedAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        pet: {
+          id: samplePetId,
+          name: 'Firulais',
+          species: 'CANINE',
+          breed: 'Labrador',
+          deletedAt: null,
+          ownerId: 'owner-uuid-revoked',
+          owner: {
+            id: 'owner-uuid-revoked',
+            name: 'Juan',
+            lastName: 'Pérez',
+            phone: '+593991234567',
+          },
+        },
+      };
+
+      mockPrisma.tag.findFirst = async () => existingTag;
+      mockPrisma.clinicOwner.findUnique = async () => ({
+        id: 'co-revoked',
+        clinicId: sampleClinicId,
+        ownerId: 'owner-uuid-revoked',
+        status: 'REVOKED',
+        expiresAt: null,
+      });
+
+      await assert.rejects(
+        async () => {
+          await tagsService.resolveUid(sampleUid, sampleClinicId, sampleUserId, sampleIp, sampleUserAgent);
+        },
+        (err: any) => {
+          assert.ok(err instanceof ForbiddenException);
+          return true;
+        },
+      );
+
+      // Debe registrar en AccessLog el intento de escaneo
+      assert.ok(loggedData, 'Debe registrar la traza en AccessLog');
+      assert.strictEqual(loggedData.petId, samplePetId);
+      assert.strictEqual(loggedData.clinicId, sampleClinicId);
+      assert.strictEqual(loggedData.action, AccessAction.NFC_SCAN);
+
+      // NO debe conceder AccessGrant
+      assert.strictEqual(grantCalled, false, 'No debe emitir AccessGrant ante status REVOKED');
+    });
+
+    it('debe preservar intacto el vínculo ACTIVE con expiresAt nulo al escanear', async () => {
+      let updateCalled = false;
+
+      const existingTag: MockTag = {
+        id: 'tag-uuid-origin',
+        uid: sampleUid,
+        publicCode: 'pub-code-origin',
+        status: TagStatus.ACTIVE,
+        petId: samplePetId,
+        deletedAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        pet: {
+          id: samplePetId,
+          name: 'Firulais',
+          species: 'CANINE',
+          breed: 'Labrador',
+          deletedAt: null,
+          ownerId: 'owner-uuid-origin',
+          owner: {
+            id: 'owner-uuid-origin',
+            name: 'Juan',
+            lastName: 'Pérez',
+            phone: '+593991234567',
+          },
+        },
+      };
+
+      mockPrisma.tag.findFirst = async () => existingTag;
+      mockPrisma.clinicOwner.findUnique = async () => ({
+        id: 'co-origin',
+        clinicId: sampleClinicId,
+        ownerId: 'owner-uuid-origin',
+        status: 'ACTIVE',
+        expiresAt: null,
+      });
+      mockPrisma.clinicOwner.update = async () => {
+        updateCalled = true;
+        return {} as any;
+      };
+
+      const res = await tagsService.resolveUid(sampleUid, sampleClinicId, sampleUserId);
+      assert.strictEqual(res.registered, true);
+      assert.strictEqual(updateCalled, false, 'No debe modificar un ClinicOwner ACTIVE con expiresAt nulo');
+    });
+
+    it('debe renovar por 30 días un vínculo vencido (expiresAt <= now) al escanear', async () => {
+      let updatedData: any = null;
+
+      const existingTag: MockTag = {
+        id: 'tag-uuid-expired',
+        uid: sampleUid,
+        publicCode: 'pub-code-expired',
+        status: TagStatus.ACTIVE,
+        petId: samplePetId,
+        deletedAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        pet: {
+          id: samplePetId,
+          name: 'Firulais',
+          species: 'CANINE',
+          breed: 'Labrador',
+          deletedAt: null,
+          ownerId: 'owner-uuid-expired',
+          owner: {
+            id: 'owner-uuid-expired',
+            name: 'Juan',
+            lastName: 'Pérez',
+            phone: '+593991234567',
+          },
+        },
+      };
+
+      mockPrisma.tag.findFirst = async () => existingTag;
+      mockPrisma.clinicOwner.findUnique = async () => ({
+        id: 'co-expired',
+        clinicId: sampleClinicId,
+        ownerId: 'owner-uuid-expired',
+        status: 'ACTIVE',
+        expiresAt: new Date(Date.now() - 10000), // Vencido hace 10s
+      });
+      mockPrisma.clinicOwner.update = async (args: any) => {
+        updatedData = args.data;
+        return { id: args.where.id, ...args.data };
+      };
+
+      const res = await tagsService.resolveUid(sampleUid, sampleClinicId, sampleUserId);
+      assert.strictEqual(res.registered, true);
+      assert.ok(updatedData, 'Debe invocar update para renovar el vencimiento');
+      assert.ok(updatedData.expiresAt > new Date(Date.now() + 25 * 86400000), 'Debe extender expiresAt a 30 días');
+    });
+
+    it('debe usar upsert con @@unique([clinicId, ownerId]) para crear vínculo activo a 30 días cuando no existe', async () => {
+      let upsertArgs: any = null;
+
+      const existingTag: MockTag = {
+        id: 'tag-uuid-new',
+        uid: sampleUid,
+        publicCode: 'pub-code-new',
+        status: TagStatus.ACTIVE,
+        petId: samplePetId,
+        deletedAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        pet: {
+          id: samplePetId,
+          name: 'Firulais',
+          species: 'CANINE',
+          breed: 'Labrador',
+          deletedAt: null,
+          ownerId: 'owner-uuid-new',
+          owner: {
+            id: 'owner-uuid-new',
+            name: 'Juan',
+            lastName: 'Pérez',
+            phone: '+593991234567',
+          },
+        },
+      };
+
+      mockPrisma.tag.findFirst = async () => existingTag;
+      mockPrisma.clinicOwner.findUnique = async () => null;
+      mockPrisma.clinicOwner.upsert = async (args: any) => {
+        upsertArgs = args;
+        return { id: 'co-upserted', ...args.create };
+      };
+
+      const res = await tagsService.resolveUid(sampleUid, sampleClinicId, sampleUserId);
+      assert.strictEqual(res.registered, true);
+      assert.ok(upsertArgs, 'Debe invocar upsert');
+      assert.deepStrictEqual(upsertArgs.where, {
+        clinicId_ownerId: { clinicId: sampleClinicId, ownerId: 'owner-uuid-new' },
+      });
+      assert.strictEqual(upsertArgs.create.status, 'ACTIVE');
+      assert.ok(upsertArgs.create.expiresAt > new Date(Date.now() + 25 * 86400000));
     });
   });
 
