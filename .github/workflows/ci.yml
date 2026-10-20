@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev/**]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test-and-verify:
+    name: Build, Lint & Test Suite
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: vet_admin
+          POSTGRES_PASSWORD: ci_test_password_secure
+          POSTGRES_DB: vet_app_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U vet_admin -d vet_app_db"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: '11.15.1'
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.14.0'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma Client
+        run: pnpm prisma:generate
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Build packages and apps
+        run: pnpm build
+
+      - name: Run unit tests
+        run: pnpm test
+
+      - name: Run in-memory E2E tests
+        run: pnpm test:e2e
+        env:
+          POSTGRES_USER: vet_admin
+          POSTGRES_PASSWORD: ci_test_password_secure
+          POSTGRES_DB: vet_app_db
+          POSTGRES_PORT: '5432'
+          DATABASE_URL: 'postgresql://vet_admin:ci_test_password_secure@localhost:5432/vet_app_db?schema=public'
+
+      - name: Deploy Prisma migrations to PostgreSQL service
+        run: pnpm --filter @vet-app/api exec prisma migrate deploy
+        env:
+          DATABASE_URL: 'postgresql://vet_admin:ci_test_password_secure@localhost:5432/vet_app_db?schema=public'
+
+      - name: Run real database E2E tests
+        run: pnpm run test:e2e:db
+        env:
+          USE_REAL_DB: 'true'
+          POSTGRES_USER: vet_admin
+          POSTGRES_PASSWORD: ci_test_password_secure
+          POSTGRES_DB: vet_app_db
+          POSTGRES_PORT: '5432'
+          DATABASE_URL: 'postgresql://vet_admin:ci_test_password_secure@localhost:5432/vet_app_db?schema=public'
