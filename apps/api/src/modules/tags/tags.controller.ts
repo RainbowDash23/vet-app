@@ -46,11 +46,7 @@ export class TagsController {
       );
     }
     const userId = req.user?.userId;
-    const ip =
-      (req.headers['x-forwarded-for'] as string)?.split(',')[0].trim() ||
-      req.ip ||
-      req.socket?.remoteAddress ||
-      undefined;
+    const ip = req.ip || req.socket?.remoteAddress;
     const userAgent = (req.headers['user-agent'] as string) || undefined;
 
     return this.tagsService.resolveUid(uid, clinicId, userId, ip, userAgent);

@@ -341,7 +341,7 @@ describe('EmergencyService & EmergencyController (T17 / RF-35, RF-36, RF-37, RF-
   });
 
   describe('g) Integración de EmergencyController: captura de IP y delegación al servicio', () => {
-    it('debe extraer ipAddress de x-forwarded-for y userAgent del header req y delegar a getEmergencyProfile', async () => {
+    it('debe extraer ipAddress de req.ip y userAgent del header req y delegar a getEmergencyProfile', async () => {
       let capturedPublicCode = '';
       let capturedIp = '';
       let capturedUserAgent = '';
@@ -364,11 +364,10 @@ describe('EmergencyService & EmergencyController (T17 / RF-35, RF-36, RF-37, RF-
 
       const mockRequest = {
         headers: {
-          'x-forwarded-for': '198.51.100.42, 10.0.0.1',
           'user-agent': 'Mozilla/5.0 EmergencyApp',
         },
-        ip: '10.0.0.1',
-        socket: { remoteAddress: '10.0.0.1' },
+        ip: '198.51.100.42',
+        socket: { remoteAddress: '198.51.100.42' },
       } as any;
 
       const result = await emergencyController.getEmergencyProfile(validPublicCode, mockRequest);
@@ -379,7 +378,7 @@ describe('EmergencyService & EmergencyController (T17 / RF-35, RF-36, RF-37, RF-
       assert.strictEqual(result.petName, 'Firulais');
     });
 
-    it('debe hacer fallback a req.ip si no existe x-forwarded-for', async () => {
+    it('debe hacer fallback a socket.remoteAddress si req.ip no está definido', async () => {
       let capturedIp = '';
 
       emergencyService.getEmergencyProfile = async (code: string, ip?: string, ua?: string) => {
@@ -389,7 +388,8 @@ describe('EmergencyService & EmergencyController (T17 / RF-35, RF-36, RF-37, RF-
 
       const mockRequest = {
         headers: {},
-        ip: '172.16.0.5',
+        ip: undefined,
+        socket: { remoteAddress: '172.16.0.5' },
       } as any;
 
       await emergencyController.getEmergencyProfile(validPublicCode, mockRequest);

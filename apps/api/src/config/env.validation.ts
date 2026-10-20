@@ -1,5 +1,5 @@
 import { plainToInstance } from 'class-transformer';
-import { IsEnum, IsNumber, IsString, Min, MinLength, validateSync } from 'class-validator';
+import { IsEnum, IsNumber, IsOptional, IsString, Min, MinLength, validateSync } from 'class-validator';
 
 export enum Environment {
   Development = 'development',
@@ -22,6 +22,14 @@ export class EnvironmentVariables {
   @IsString()
   @MinLength(32)
   JWT_SECRET!: string;
+
+  @IsOptional()
+  @IsString()
+  TRUST_PROXY?: string;
+
+  @IsOptional()
+  @IsString()
+  CORS_ORIGIN?: string;
 }
 
 export function validateEnv(config: Record<string, unknown>): EnvironmentVariables {

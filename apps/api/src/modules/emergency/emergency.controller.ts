@@ -25,11 +25,7 @@ export class EmergencyController {
     @Param('publicCode') publicCode: string,
     @Req() req: Request,
   ): Promise<EmergencyPetProfileDto> {
-    const forwardedFor = req.headers['x-forwarded-for'];
-    const ipAddress =
-      typeof forwardedFor === 'string'
-        ? forwardedFor.split(',')[0].trim()
-        : (req.ip || (req.socket as any)?.remoteAddress);
+    const ipAddress = req.ip || (req.socket as any)?.remoteAddress;
 
     const userAgent =
       typeof req.headers['user-agent'] === 'string'
