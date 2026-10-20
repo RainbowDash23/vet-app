@@ -187,12 +187,18 @@ export class VisitsService {
   /**
    * Consulta el detalle de una visita por su identificador único.
    */
-  async findById(id: string): Promise<Visit> {
+  async findById(id: string, clinicId?: string): Promise<Visit> {
+    const where: Prisma.VisitWhereInput = {
+      id,
+      deletedAt: null,
+    };
+
+    if (clinicId) {
+      where.clinicId = clinicId;
+    }
+
     const visit = await this.prisma.visit.findFirst({
-      where: {
-        id,
-        deletedAt: null,
-      },
+      where,
       include: {
         pet: true,
         veterinarian: {

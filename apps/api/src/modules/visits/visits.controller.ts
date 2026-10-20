@@ -83,8 +83,11 @@ export class VisitsController {
    * Consulta el detalle de una visita específica por su identificador.
    */
   @Get(':id')
-  async findById(@Param('id') id: string): Promise<Visit> {
-    return this.visitsService.findById(id);
+  async findById(
+    @CurrentClinicId() clinicId: string,
+    @Param('id') id: string,
+  ): Promise<Visit> {
+    return this.visitsService.findById(id, clinicId);
   }
 
   /**
