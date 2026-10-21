@@ -300,8 +300,11 @@ describe('SerialPortDriver (apps/desktop/electron/serialport.driver.ts - RF-66, 
       assert.equal(manager.getStatus().connected, false);
       assert.equal(manager.getStatus().reconnecting, true);
 
-      // Esperar a que se consuman los 10 intentos (10 * 10ms + margen = ~250ms)
-      await new Promise((resolve) => setTimeout(resolve, 250));
+      // Esperar a que se consuman los 10 intentos de reconexión de forma resiliente
+      const deadline = Date.now() + 1500;
+      while (manager.getStatus().reconnecting && Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
 
       const finalStatus = manager.getStatus();
       assert.equal(

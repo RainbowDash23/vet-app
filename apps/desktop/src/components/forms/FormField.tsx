@@ -9,6 +9,7 @@ import styles from './FormField.module.css';
  */
 export enum FormFieldType {
   INPUT = 'input',
+  SELECT = 'select',
 }
 
 export interface FormFieldProps<T extends FieldValues> {
@@ -21,6 +22,7 @@ export interface FormFieldProps<T extends FieldValues> {
   icon?: ReactNode;
   disabled?: boolean;
   description?: string;
+  children?: ReactNode;
 }
 
 /**
@@ -38,6 +40,7 @@ export function FormField<T extends FieldValues>({
   icon,
   disabled = false,
   description,
+  children,
 }: FormFieldProps<T>): React.ReactElement {
   return (
     <Controller
@@ -47,7 +50,7 @@ export function FormField<T extends FieldValues>({
         <div className={styles.fieldGroup}>
           {label && <label className={styles.label}>{label}</label>}
 
-          {/* Renderizado dinámico según el tipo de campo (actualmente tipo INPUT) */}
+          {/* Renderizado dinámico según el tipo de campo */}
           {fieldType === FormFieldType.INPUT && (
             <div
               className={`
@@ -65,6 +68,26 @@ export function FormField<T extends FieldValues>({
                 disabled={disabled}
                 className={styles.input}
               />
+            </div>
+          )}
+
+          {fieldType === FormFieldType.SELECT && (
+            <div
+              className={`
+                ${styles.inputWrapper}
+                ${error ? styles.inputWrapperError : ''}
+                ${disabled ? styles.inputWrapperDisabled : ''}
+              `.trim()}
+            >
+              {icon && <span className={styles.icon}>{icon}</span>}
+              <select
+                {...field}
+                value={field.value ?? ''}
+                disabled={disabled}
+                className={styles.input}
+              >
+                {children}
+              </select>
             </div>
           )}
 

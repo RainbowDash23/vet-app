@@ -1,5 +1,6 @@
 import type {
   PetResponseDto,
+  CreatePetDto,
   PaginatedResult,
   ResolveTagResponseDto,
   VisitResponseDto,
@@ -97,6 +98,13 @@ export class PetsService {
     return this.apiClient.get<PaginatedResult<VaccinationRecord>>(
       `/vaccinations/pet/${encodedPetId}?${params.toString()}`,
     );
+  }
+
+  /**
+   * Crea una nueva mascota asociada a un propietario existente (RF-17).
+   */
+  public async createPet(dto: CreatePetDto): Promise<PetResponseDto> {
+    return this.apiClient.post<PetResponseDto>('/pets', dto);
   }
 
   /**
