@@ -3,7 +3,7 @@ import type { VisitResponseDto, VisitStatus } from '@vet-app/shared-types';
 import { visitsService as defaultVisitsService, VisitsService } from '../services/visits.service';
 import { NewVisitModal } from '../components/screens/new-visit-modal';
 import { CancelVisitDialog } from '../components/screens/cancel-visit-dialog';
-import { PlusIcon, CalendarIcon, CheckIcon, CrossIcon } from '../components/ui/icons';
+import { PlusIcon, CalendarIcon, CheckIcon, CrossIcon, ChevronLeftIcon, ChevronRightIcon } from '../components/ui/icons';
 import styles from './schedule-screen.module.css';
 
 const VISIT_STATUS_CANCELLED = 'CANCELLED';
@@ -174,7 +174,8 @@ export const ScheduleScreen: React.FC<ScheduleScreenProps> = ({
             className={styles.navButton}
             aria-label="Día anterior"
           >
-            ◀ Anterior
+            <ChevronLeftIcon size={14} aria-hidden="true" />
+            <span>Anterior</span>
           </button>
           <button
             type="button"
@@ -189,7 +190,8 @@ export const ScheduleScreen: React.FC<ScheduleScreenProps> = ({
             className={styles.navButton}
             aria-label="Día siguiente"
           >
-            Siguiente ▶
+            <span>Siguiente</span>
+            <ChevronRightIcon size={14} aria-hidden="true" />
           </button>
           <span className={styles.currentDateText}>
             Fecha: <strong>{selectedDate}</strong>
