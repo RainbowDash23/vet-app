@@ -24,20 +24,27 @@ import {
   DirtyGuardContext,
 } from './hooks/use-form-dirty-guard';
 import { petsService as defaultPetsService, PetsService } from './services/pets.service';
+import { ownersService as defaultOwnersService, OwnersService } from './services/owners.service';
 import { apiClient as defaultApiClient, ApiClient, ApiError } from './services/api.client';
 
 export interface AppContentProps {
   initialScreen?: ScreenId;
   petsServiceInstance?: PetsService;
   apiClientInstance?: ApiClient;
+  ownersServiceInstance?: OwnersService;
 }
 
 export const AppContent: React.FC<AppContentProps> = ({
   initialScreen,
   petsServiceInstance = defaultPetsService,
   apiClientInstance = defaultApiClient,
+  ownersServiceInstance,
 }) => {
   const { isAuthenticated, user, role, logout } = useAuth();
+  const ownersService = React.useMemo(
+    () => ownersServiceInstance ?? (apiClientInstance ? new OwnersService(apiClientInstance) : defaultOwnersService),
+    [ownersServiceInstance, apiClientInstance]
+  );
   const [activeScreen, setActiveScreen] = useState<ScreenId>(
     initialScreen ?? (isAuthenticated ? 'pet-list' : 'login')
   );
@@ -175,6 +182,8 @@ export const AppContent: React.FC<AppContentProps> = ({
         return (
           <PetRegisterScreen
             initialNfcUid={prefilledNfcUid}
+            petsServiceInstance={petsServiceInstance}
+            ownersServiceInstance={ownersService}
             onNavigateToOwnerRegister={() => setActiveScreen('owner-register')}
             onNavigateToPetFile={(petId) => {
               setActivePetId(petId);
@@ -185,6 +194,7 @@ export const AppContent: React.FC<AppContentProps> = ({
       case 'owner-register':
         return (
           <OwnerRegisterScreen
+            ownersServiceInstance={ownersService}
             onOwnerCreated={() => setActiveScreen('pet-register')}
             onNavigateToPetRegister={() => setActiveScreen('pet-register')}
           />
@@ -192,6 +202,7 @@ export const AppContent: React.FC<AppContentProps> = ({
       case 'clinical-record':
         return (
           <PatientFileScreen
+            petsService={petsServiceInstance}
             uid={activePetUid}
             petId={activePetId}
             initialData={activeTagData}

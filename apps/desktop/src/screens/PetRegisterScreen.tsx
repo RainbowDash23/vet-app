@@ -5,8 +5,8 @@ import { z } from 'zod';
 import { PetSpecies, PetSex, ReproductiveStatus } from '@vet-app/shared-types';
 import type { PetResponseDto, OwnerResponseDto } from '@vet-app/shared-types';
 import { FormField, FormFieldType } from '../components/forms/FormField';
-import { petsService } from '../services/pets.service';
-import { ownersService } from '../services/owners.service';
+import { petsService as defaultPetsService, PetsService } from '../services/pets.service';
+import { ownersService as defaultOwnersService, OwnersService } from '../services/owners.service';
 import { ApiError } from '../services/api.client';
 import { fakeTagReader } from '../readers/fake-tag-reader';
 import { useSafeDirtyGuard } from '../hooks/use-form-dirty-guard';
@@ -32,6 +32,8 @@ export interface PetRegisterScreenProps {
   onPetCreated?: (pet: PetResponseDto) => void;
   onNavigateToOwnerRegister?: () => void;
   onNavigateToPetFile?: (petId: string) => void;
+  petsServiceInstance?: PetsService;
+  ownersServiceInstance?: OwnersService;
 }
 
 export const PetRegisterScreen: React.FC<PetRegisterScreenProps> = ({
@@ -40,6 +42,8 @@ export const PetRegisterScreen: React.FC<PetRegisterScreenProps> = ({
   onPetCreated,
   onNavigateToOwnerRegister,
   onNavigateToPetFile,
+  petsServiceInstance = defaultPetsService,
+  ownersServiceInstance = defaultOwnersService,
 }) => {
   const [owners, setOwners] = useState<OwnerResponseDto[]>([]);
   const [isLoadingOwners, setIsLoadingOwners] = useState(false);
@@ -80,7 +84,7 @@ export const PetRegisterScreen: React.FC<PetRegisterScreenProps> = ({
     let mounted = true;
     setIsLoadingOwners(true);
 
-    ownersService
+    ownersServiceInstance
       .getOwners({ limit: 100 })
       .then((res) => {
         if (mounted && res?.data) {
@@ -140,7 +144,7 @@ export const PetRegisterScreen: React.FC<PetRegisterScreenProps> = ({
 
     try {
       // 1. Crear la mascota con POST /pets (RF-17, RF-69)
-      const newPet = await petsService.createPet({
+      const newPet = await petsServiceInstance.createPet({
         name: data.name.trim(),
         species: data.species,
         breed: data.breed?.trim() || null,
@@ -154,7 +158,7 @@ export const PetRegisterScreen: React.FC<PetRegisterScreenProps> = ({
       const cleanUid = data.nfcUid?.trim();
       if (cleanUid && cleanUid.length >= 8) {
         try {
-          await petsService.assignTag({
+          await petsServiceInstance.assignTag({
             uid: cleanUid,
             petId: newPet.id,
           });

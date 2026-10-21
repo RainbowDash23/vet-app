@@ -2,6 +2,7 @@ import React, {
   useState,
   useRef,
   useCallback,
+  useMemo,
   useContext,
   createContext,
   type ReactNode,
@@ -90,6 +91,9 @@ export function useFormDirtyGuard(options: UseFormDirtyGuardOptions = {}): Dirty
 
   const setIsDirty = useCallback(
     (dirty: boolean) => {
+      if (isDirtyRef.current === dirty) {
+        return;
+      }
       isDirtyRef.current = dirty;
       triggerRerender();
     },
@@ -149,23 +153,26 @@ export function useFormDirtyGuard(options: UseFormDirtyGuardOptions = {}): Dirty
     },
   });
 
-  return {
-    get isDirty() {
-      return isDirtyRef.current;
-    },
-    setIsDirty,
-    setDirtyState: setIsDirty,
-    get pendingUid() {
-      return pendingUidRef.current;
-    },
-    get showUnsavedDialog() {
-      return showUnsavedDialogRef.current;
-    },
-    handleTagDetected,
-    confirmDiscard,
-    cancelDiscard,
-    resetGuard,
-  };
+  return useMemo(
+    () => ({
+      get isDirty() {
+        return isDirtyRef.current;
+      },
+      setIsDirty,
+      setDirtyState: setIsDirty,
+      get pendingUid() {
+        return pendingUidRef.current;
+      },
+      get showUnsavedDialog() {
+        return showUnsavedDialogRef.current;
+      },
+      handleTagDetected,
+      confirmDiscard,
+      cancelDiscard,
+      resetGuard,
+    }),
+    [setIsDirty, handleTagDetected, confirmDiscard, cancelDiscard, resetGuard]
+  );
 }
 
 export const DirtyGuardContext = createContext<DirtyGuardState | null>(null);

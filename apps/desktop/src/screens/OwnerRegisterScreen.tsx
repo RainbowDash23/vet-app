@@ -4,7 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import type { OwnerResponseDto } from '@vet-app/shared-types';
 import { FormField } from '../components/forms/FormField';
-import { ownersService } from '../services/owners.service';
+import { ownersService as defaultOwnersService, OwnersService } from '../services/owners.service';
 import { ApiError } from '../services/api.client';
 import { useSafeDirtyGuard } from '../hooks/use-form-dirty-guard';
 import styles from './OwnerRegisterScreen.module.css';
@@ -23,11 +23,13 @@ type OwnerFormValues = z.infer<typeof ownerSchema>;
 export interface OwnerRegisterScreenProps {
   onOwnerCreated?: (owner: OwnerResponseDto) => void;
   onNavigateToPetRegister?: (ownerId?: string) => void;
+  ownersServiceInstance?: OwnersService;
 }
 
 export const OwnerRegisterScreen: React.FC<OwnerRegisterScreenProps> = ({
   onOwnerCreated,
   onNavigateToPetRegister,
+  ownersServiceInstance = defaultOwnersService,
 }) => {
   const [isCheckingLookup, setIsCheckingLookup] = useState(false);
   const [lookupResult, setLookupResult] = useState<{
@@ -79,7 +81,7 @@ export const OwnerRegisterScreen: React.FC<OwnerRegisterScreenProps> = ({
     setLookupResult({ checked: false, exists: false });
 
     try {
-      const res = await ownersService.lookup(docId);
+      const res = await ownersServiceInstance.lookup(docId);
       if (res.exists) {
         setLookupResult({
           checked: true,
@@ -122,7 +124,7 @@ export const OwnerRegisterScreen: React.FC<OwnerRegisterScreenProps> = ({
     setApiErrorMessage(null);
 
     try {
-      const created = await ownersService.createOwner({
+      const created = await ownersServiceInstance.createOwner({
         documentId: data.documentId,
         name: data.name,
         lastName: data.lastName,

@@ -59,7 +59,7 @@ export function useNfcReader(
 
   const unsubscribeRef = useRef<(() => void) | null>(null);
 
-  // Inicializar o actualizar suscripción
+  // Inicializar suscripción inmediata (compatible con renderToStaticMarkup en pruebas SSR y clientes Electron)
   if (enabled && !unsubscribeRef.current) {
     const handleTag = (uid: string) => {
       setLastTagUid(uid);
