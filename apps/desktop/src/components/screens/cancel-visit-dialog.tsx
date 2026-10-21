@@ -180,7 +180,7 @@ export const CancelVisitDialog: React.FC<CancelVisitDialogProps> = ({
 
           {!isValidReason && (
             <p className={styles.requirementNote} role="status">
-              ⚠️ Ingrese al menos 10 caracteres para habilitar la confirmación (RF-42).
+              Ingrese al menos 10 caracteres para habilitar la confirmación (RF-42).
             </p>
           )}
         </div>

@@ -51,6 +51,7 @@ export const HardwareStatusIndicator: React.FC<HardwareStatusIndicatorProps> = (
   }, [statusProp]);
 
   const currentStatus = statusProp ?? internalStatus;
+  const isBrowser = typeof window !== 'undefined' && !window.electronAPI && statusProp === undefined;
 
   const isConnected = currentStatus.connected;
   const isReconnecting = !isConnected && currentStatus.reconnecting === true;
@@ -63,7 +64,7 @@ export const HardwareStatusIndicator: React.FC<HardwareStatusIndicatorProps> = (
   // Determinación de clases y atributos accesibles
   let statusClass = styles.disconnected;
   let dotClass = styles.dotDisconnected;
-  let ariaLabel = 'Hardware serial desconectado';
+  let ariaLabel = isBrowser ? 'Lector no disponible en navegador' : 'Hardware serial desconectado';
 
   if (isConnected) {
     statusClass = styles.connected;
@@ -94,7 +95,9 @@ export const HardwareStatusIndicator: React.FC<HardwareStatusIndicatorProps> = (
       )}
 
       {isDisconnected && (
-        <span className={styles.label}>Hardware Desconectado</span>
+        <span className={styles.label}>
+          {isBrowser ? 'Lector no disponible en navegador' : 'Hardware Desconectado'}
+        </span>
       )}
 
       {isReconnecting && (

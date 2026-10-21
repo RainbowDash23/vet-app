@@ -1,6 +1,19 @@
 import React, { useEffect, useState } from 'react';
 import type { Role, SerialPortInfo } from '@vet-app/shared-types';
 import { fakeTagReader } from '../../readers/fake-tag-reader';
+import {
+  ClinicIcon,
+  ClipboardIcon,
+  PetIcon,
+  TagIcon,
+  CalendarIcon,
+  StethoscopeIcon,
+  SyringeIcon,
+  UsersIcon,
+  ShieldIcon,
+  LockIcon,
+  WarningIcon,
+} from '../ui/icons';
 import styles from './sidebar.module.css';
 
 export type ScreenId =
@@ -14,13 +27,14 @@ export type ScreenId =
   | 'care-vaccination'
   | 'clinic-management'
   | 'staff-management'
+  | 'users'
   | 'audit-logs'
   | string;
 
 export interface NavItemConfig {
   id: ScreenId;
   label: string;
-  icon: string;
+  icon: React.ReactNode;
 }
 
 export interface SidebarProps {
@@ -31,31 +45,31 @@ export interface SidebarProps {
 }
 
 const RECEPTION_NAV_ITEMS: NavItemConfig[] = [
-  { id: 'pet-list', label: 'Lista de Pacientes', icon: '📋' },
-  { id: 'pet-register', label: 'Registro de Mascota', icon: '🐶' },
-  { id: 'tag-management', label: 'Búsqueda/Asignación de Tag', icon: '🏷️' },
-  { id: 'appointments', label: 'Agenda de Visitas', icon: '📅' },
+  { id: 'pet-list', label: 'Lista de Pacientes', icon: <ClipboardIcon size={16} /> },
+  { id: 'pet-register', label: 'Registro de Mascota', icon: <PetIcon size={16} /> },
+  { id: 'tag-management', label: 'Búsqueda/Asignación de Tag', icon: <TagIcon size={16} /> },
+  { id: 'appointments', label: 'Agenda de Visitas', icon: <CalendarIcon size={16} /> },
 ];
 
 const VET_NAV_ITEMS: NavItemConfig[] = [
-  { id: 'pet-list', label: 'Lista de Pacientes', icon: '📋' },
-  { id: 'clinical-record', label: 'Ficha Clínica', icon: '🩺' },
-  { id: 'vet-agenda', label: 'Agenda de Consultas', icon: '📅' },
-  { id: 'care-vaccination', label: 'Registro de Atención y Vacunación', icon: '💉' },
+  { id: 'pet-list', label: 'Lista de Pacientes', icon: <ClipboardIcon size={16} /> },
+  { id: 'clinical-record', label: 'Ficha Clínica', icon: <StethoscopeIcon size={16} /> },
+  { id: 'vet-agenda', label: 'Agenda de Consultas', icon: <CalendarIcon size={16} /> },
+  { id: 'care-vaccination', label: 'Registro de Atención y Vacunación', icon: <SyringeIcon size={16} /> },
 ];
 
 const ADMIN_NAV_ITEMS: NavItemConfig[] = [
-  { id: 'clinic-management', label: 'Gestión de Clínica', icon: '🏥' },
-  { id: 'staff-management', label: 'Personal', icon: '👥' },
-  { id: 'pet-list', label: 'Pacientes', icon: '📋' },
-  { id: 'appointments', label: 'Agenda', icon: '📅' },
-  { id: 'audit-logs', label: 'Auditoría', icon: '🛡️' },
+  { id: 'clinic-management', label: 'Gestión de Clínica', icon: <ClinicIcon size={16} /> },
+  { id: 'users', label: 'Personal (Usuarios)', icon: <UsersIcon size={16} /> },
+  { id: 'pet-list', label: 'Pacientes', icon: <ClipboardIcon size={16} /> },
+  { id: 'appointments', label: 'Agenda', icon: <CalendarIcon size={16} /> },
+  { id: 'audit-logs', label: 'Auditoría', icon: <ShieldIcon size={16} /> },
 ];
 
 const DEFAULT_NAV_ITEMS: NavItemConfig[] = [
-  { id: 'login', label: 'Iniciar Sesión', icon: '🔐' },
-  { id: 'pet-list', label: 'Lista de Pacientes', icon: '📋' },
-  { id: 'pet-register', label: 'Registro de Mascota', icon: '🐶' },
+  { id: 'login', label: 'Iniciar Sesión', icon: <LockIcon size={16} /> },
+  { id: 'pet-list', label: 'Lista de Pacientes', icon: <ClipboardIcon size={16} /> },
+  { id: 'pet-register', label: 'Registro de Mascota', icon: <PetIcon size={16} /> },
 ];
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -69,7 +83,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [selectedPort, setSelectedPort] = useState<string>('');
   const [portError, setPortError] = useState<string | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
-  const isDev = Boolean(import.meta.env?.DEV);
+  const showDevTools = import.meta.env?.VITE_DEV_TOOLS === 'true';
 
   // Suscripción al lector de tags (tanto la implementación simulada como eventos nativos)
   useEffect(() => {
@@ -151,7 +165,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     <aside className={rootClass} role="complementary" aria-label="Menú principal de navegación">
       <div>
         <div className={styles.brand}>
-          <div className={styles.brandIcon} aria-hidden="true">🐾</div>
+          <PetIcon className={styles.brandIcon} aria-hidden="true" size={20} />
           <span className={styles.brandName}>VetApp</span>
           <span className={styles.brandTag}>Desktop</span>
         </div>
@@ -188,7 +202,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div className={styles.nfcWidget}>
           <div className={styles.nfcHeader}>
             <span>Lector NFC</span>
-            <span className={styles.nfcBadge}>{isDev ? 'Dev / Serial' : 'Serial USB'}</span>
+            <span className={styles.nfcBadge}>{showDevTools ? 'Dev / Serial' : 'Serial USB'}</span>
           </div>
 
           <div className={styles.nfcUid}>
@@ -229,17 +243,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
           {portError && (
             <div role="alert" className={styles.portError}>
-              ⚠️ {portError}
+              <WarningIcon size={14} aria-hidden="true" />
+              <span>{portError}</span>
             </div>
           )}
 
-          {isDev && (
+          {showDevTools && (
             <button
               type="button"
               className={styles.simulateButton}
               onClick={handleSimulateTag}
             >
-              📡 Simular lectura NFC
+              Simular lectura NFC
             </button>
           )}
         </div>

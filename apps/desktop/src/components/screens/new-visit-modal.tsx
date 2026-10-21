@@ -9,6 +9,7 @@ import {
   DialogFooter,
   Button,
 } from '../ui';
+import { CalendarIcon } from '../ui/icons';
 import { visitsService as defaultVisitsService, VisitsService } from '../../services/visits.service';
 import { ApiError } from '../../services/api.client';
 import styles from './new-visit-modal.module.css';
@@ -159,7 +160,7 @@ export const NewVisitModal: React.FC<NewVisitModalProps> = ({
         <DialogHeader className={styles.header}>
           <div className={styles.titleRow}>
             <div className={styles.iconBadge} aria-hidden="true">
-              📅
+              <CalendarIcon size={18} />
             </div>
             <div>
               <DialogTitle className={styles.title}>

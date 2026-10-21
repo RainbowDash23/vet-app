@@ -1,6 +1,7 @@
 import React from 'react';
 import type { Role, HardwareStatus } from '@vet-app/shared-types';
 import { HardwareStatusIndicator } from './hardware-status-indicator';
+import { ClinicIcon, LogoutIcon } from '../ui/icons';
 import styles from './header.module.css';
 
 export interface HeaderProps {
@@ -39,7 +40,7 @@ export const Header: React.FC<HeaderProps> = ({
     <header className={rootClass} role="banner">
       <div className={styles.leftSection}>
         <div className={styles.clinicBadge}>
-          <span className={styles.clinicIcon} aria-hidden="true">🏥</span>
+          <ClinicIcon className={styles.clinicIcon} aria-hidden="true" size={16} />
           <span className={styles.clinicName}>{clinicName}</span>
         </div>
       </div>
@@ -58,8 +59,8 @@ export const Header: React.FC<HeaderProps> = ({
           </span>
         )}
 
-        {/* Información de Usuario y Cierre de Sesión */}
-        {(userName || onLogout) && (
+        {/* Información de Usuario y Cierre de Sesión (solo visible para usuario autenticado) */}
+        {(userName || role) && (
           <div className={styles.userSection}>
             {userName && <span className={styles.userName}>{userName}</span>}
             {onLogout && (
@@ -69,7 +70,7 @@ export const Header: React.FC<HeaderProps> = ({
                 onClick={onLogout}
                 aria-label="Cerrar sesión"
               >
-                <span aria-hidden="true">🚪</span>
+                <LogoutIcon aria-hidden="true" size={15} />
                 <span>Cerrar Sesión</span>
               </button>
             )}

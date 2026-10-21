@@ -4,3 +4,4 @@ export * from './button/button';
 export * from './input/input';
 export * from './dialog/dialog';
 export * from './alert-dialog/alert-dialog';
+export * from './icons';

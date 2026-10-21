@@ -3,6 +3,7 @@ import type { VisitResponseDto, VisitStatus } from '@vet-app/shared-types';
 import { visitsService as defaultVisitsService, VisitsService } from '../services/visits.service';
 import { NewVisitModal } from '../components/screens/new-visit-modal';
 import { CancelVisitDialog } from '../components/screens/cancel-visit-dialog';
+import { PlusIcon, CalendarIcon, CheckIcon, CrossIcon } from '../components/ui/icons';
 import styles from './schedule-screen.module.css';
 
 const VISIT_STATUS_CANCELLED = 'CANCELLED';
@@ -158,7 +159,7 @@ export const ScheduleScreen: React.FC<ScheduleScreenProps> = ({
             onClick={() => setIsNewModalOpen(true)}
             className={styles.primaryButton}
           >
-            <span>➕</span>
+            <PlusIcon size={14} aria-hidden="true" style={{ marginRight: '6px' }} />
             <span>Agendar Cita</span>
           </button>
         </div>
@@ -230,7 +231,7 @@ export const ScheduleScreen: React.FC<ScheduleScreenProps> = ({
       ) : visits.length === 0 ? (
         <div className={styles.emptyState}>
           <div className={styles.emptyIcon} aria-hidden="true">
-            📅
+            <CalendarIcon size={32} />
           </div>
           <h2 className={styles.emptyTitle}>No hay citas programadas</h2>
           <p className={styles.emptyDescription}>
@@ -289,17 +290,19 @@ export const ScheduleScreen: React.FC<ScheduleScreenProps> = ({
                 <div className={styles.statusCol}>
                   {isCancelled && (
                     <span className={[styles.badge, styles.badgeCancelled].join(' ')}>
-                      ✕ Cancelada
+                      <CrossIcon size={12} style={{ display: 'inline', verticalAlign: 'text-bottom', marginRight: '4px' }} />
+                      Cancelada
                     </span>
                   )}
                   {isAttended && (
                     <span className={[styles.badge, styles.badgeAttended].join(' ')}>
-                      ✓ Atendida
+                      <CheckIcon size={12} style={{ display: 'inline', verticalAlign: 'text-bottom', marginRight: '4px' }} />
+                      Atendida
                     </span>
                   )}
                   {isScheduled && (
                     <span className={[styles.badge, styles.badgeScheduled].join(' ')}>
-                      ● Programada
+                      Programada
                     </span>
                   )}
 

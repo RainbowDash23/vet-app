@@ -5,6 +5,17 @@ import { z } from 'zod';
 import { PetSpecies, PetSex, ReproductiveStatus } from '@vet-app/shared-types';
 import type { PetResponseDto, OwnerResponseDto } from '@vet-app/shared-types';
 import { FormField, FormFieldType } from '../components/forms/FormField';
+import {
+  CheckIcon,
+  WarningIcon,
+  StethoscopeIcon,
+  PetIcon,
+  TagIcon,
+  DnaIcon,
+  GenderIcon,
+  PaletteIcon,
+  RadioIcon,
+} from '../components/ui/icons';
 import { petsService as defaultPetsService, PetsService } from '../services/pets.service';
 import { ownersService as defaultOwnersService, OwnersService } from '../services/owners.service';
 import { ApiError } from '../services/api.client';
@@ -227,7 +238,10 @@ export const PetRegisterScreen: React.FC<PetRegisterScreenProps> = ({
 
         <div className={styles.card}>
           <div className={`${styles.alertBox} ${styles.alertSuccess}`} role="status">
-            <strong>✅ Paciente Registrado con Éxito</strong>
+            <strong>
+              <CheckIcon size={16} style={{ display: 'inline', verticalAlign: 'text-bottom', marginRight: '6px' }} />
+              Paciente Registrado con Éxito
+            </strong>
             <p>
               Nombre: <strong>{createdPet.name}</strong> ({createdPet.species})
             </p>
@@ -236,7 +250,10 @@ export const PetRegisterScreen: React.FC<PetRegisterScreenProps> = ({
 
           {tagWarningMessage && (
             <div className={`${styles.alertBox} ${styles.alertWarning}`} role="alert">
-              <strong>⚠️ Aviso sobre el llavero NFC:</strong>
+              <strong>
+                <WarningIcon size={14} style={{ display: 'inline', verticalAlign: 'text-bottom', marginRight: '4px' }} />
+                Aviso sobre el llavero NFC:
+              </strong>
               <p>{tagWarningMessage}</p>
             </div>
           )}
@@ -247,7 +264,8 @@ export const PetRegisterScreen: React.FC<PetRegisterScreenProps> = ({
               className={styles.actionButton}
               onClick={() => onNavigateToPetFile?.(createdPet.id)}
             >
-              🩺 Ver Ficha Clínica
+              <StethoscopeIcon size={16} style={{ display: 'inline', verticalAlign: 'text-bottom', marginRight: '6px' }} />
+              Ver Ficha Clínica
             </button>
             <button
               type="button"
@@ -274,7 +292,10 @@ export const PetRegisterScreen: React.FC<PetRegisterScreenProps> = ({
       <div className={styles.card}>
         {apiErrorMessage && (
           <div className={`${styles.alertBox} ${styles.alertError}`} role="alert">
-            <strong>⚠️ Error:</strong>
+            <strong>
+              <WarningIcon size={14} style={{ display: 'inline', verticalAlign: 'text-bottom', marginRight: '4px' }} />
+              Error:
+            </strong>
             <p>{apiErrorMessage}</p>
           </div>
         )}
@@ -320,7 +341,7 @@ export const PetRegisterScreen: React.FC<PetRegisterScreenProps> = ({
             name="name"
             label="Nombre de la Mascota"
             placeholder="Ej: Max, Luna..."
-            icon="🐾"
+            icon={<PetIcon size={16} />}
           />
 
           <div className={styles.row}>
@@ -329,7 +350,7 @@ export const PetRegisterScreen: React.FC<PetRegisterScreenProps> = ({
               name="species"
               label="Especie"
               fieldType={FormFieldType.SELECT}
-              icon="🏷️"
+              icon={<TagIcon size={16} />}
             >
               <option value={PetSpecies.CANINE}>Canino (Perro)</option>
               <option value={PetSpecies.FELINE}>Felino (Gato)</option>
@@ -341,7 +362,7 @@ export const PetRegisterScreen: React.FC<PetRegisterScreenProps> = ({
               name="breed"
               label="Raza (Opcional)"
               placeholder="Ej: Golden Retriever"
-              icon="🧬"
+              icon={<DnaIcon size={16} />}
             />
           </div>
 
@@ -351,7 +372,7 @@ export const PetRegisterScreen: React.FC<PetRegisterScreenProps> = ({
               name="sex"
               label="Sexo"
               fieldType={FormFieldType.SELECT}
-              icon="⚧"
+              icon={<GenderIcon size={16} />}
             >
               <option value={PetSex.MALE}>Macho</option>
               <option value={PetSex.FEMALE}>Hembra</option>
@@ -363,7 +384,7 @@ export const PetRegisterScreen: React.FC<PetRegisterScreenProps> = ({
               name="color"
               label="Color / Manto (Opcional)"
               placeholder="Ej: Dorado, Manchas negras"
-              icon="🎨"
+              icon={<PaletteIcon size={16} />}
             />
           </div>
 
@@ -372,7 +393,7 @@ export const PetRegisterScreen: React.FC<PetRegisterScreenProps> = ({
             name="nfcUid"
             label="UID del Llavero NFC"
             placeholder="Escanee el llavero o pulse simular..."
-            icon="📡"
+            icon={<RadioIcon size={16} />}
             description="Acerca el llavero al lector serial USB o ingresa el UID manualmente."
           />
 

@@ -4,6 +4,17 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import type { OwnerResponseDto } from '@vet-app/shared-types';
 import { FormField } from '../components/forms/FormField';
+import {
+  CheckIcon,
+  WarningIcon,
+  PetIcon,
+  IdCardIcon,
+  SearchIcon,
+  UserIcon,
+  PhoneIcon,
+  MailIcon,
+  HomeIcon,
+} from '../components/ui/icons';
 import { ownersService as defaultOwnersService, OwnersService } from '../services/owners.service';
 import { ApiError } from '../services/api.client';
 import { useSafeDirtyGuard } from '../hooks/use-form-dirty-guard';
@@ -178,7 +189,10 @@ export const OwnerRegisterScreen: React.FC<OwnerRegisterScreenProps> = ({
 
         <div className={styles.card}>
           <div className={`${styles.alertBox} ${styles.alertSuccess}`} role="status">
-            <strong>✅ Registro Exitoso</strong>
+            <strong>
+              <CheckIcon size={16} style={{ display: 'inline', verticalAlign: 'text-bottom', marginRight: '6px' }} />
+              Registro Exitoso
+            </strong>
             <p>
               Titular: <strong>{createdOwner.name} {createdOwner.lastName}</strong> (C.I. {createdOwner.documentId})
             </p>
@@ -191,7 +205,8 @@ export const OwnerRegisterScreen: React.FC<OwnerRegisterScreenProps> = ({
               className={styles.actionButton}
               onClick={() => onNavigateToPetRegister?.(createdOwner.id)}
             >
-              🐾 Registrar Mascota para este Titular
+              <PetIcon size={16} style={{ display: 'inline', verticalAlign: 'text-bottom', marginRight: '6px' }} />
+              Registrar Mascota para este Titular
             </button>
             <button
               type="button"
@@ -224,7 +239,7 @@ export const OwnerRegisterScreen: React.FC<OwnerRegisterScreenProps> = ({
                 name="documentId"
                 label="Documento de Identidad (Cédula / DNI)"
                 placeholder="Ej: 12345678"
-                icon="🪪"
+                icon={<IdCardIcon size={16} />}
                 disabled={lookupResult.exists}
               />
             </div>
@@ -234,26 +249,37 @@ export const OwnerRegisterScreen: React.FC<OwnerRegisterScreenProps> = ({
               onClick={handleLookup}
               disabled={isCheckingLookup || !documentIdValue || documentIdValue.length < 3}
             >
-              {isCheckingLookup ? 'Verificando...' : '🔍 Verificar'}
+              {isCheckingLookup ? 'Verificando...' : (
+                <>
+                  <SearchIcon size={14} style={{ display: 'inline', verticalAlign: 'text-bottom', marginRight: '4px' }} />
+                  Verificar
+                </>
+              )}
             </button>
           </div>
 
           {lookupResult.checked && lookupResult.exists && (
             <div className={`${styles.alertBox} ${styles.alertInfo}`} role="alert">
-              <strong>ℹ️ Titular Existente en la Red</strong>
+              <strong>Titular Existente en la Red</strong>
               <p>{lookupResult.message}</p>
             </div>
           )}
 
           {lookupResult.checked && !lookupResult.exists && (
             <div className={`${styles.alertBox} ${styles.alertSuccess}`} role="status">
-              <p>✅ {lookupResult.message}</p>
+              <p>
+                <CheckIcon size={14} style={{ display: 'inline', verticalAlign: 'text-bottom', marginRight: '4px' }} />
+                {lookupResult.message}
+              </p>
             </div>
           )}
 
           {apiErrorMessage && (
             <div className={`${styles.alertBox} ${styles.alertError}`} role="alert">
-              <strong>⚠️ Error</strong>
+              <strong>
+                <WarningIcon size={14} style={{ display: 'inline', verticalAlign: 'text-bottom', marginRight: '4px' }} />
+                Error
+              </strong>
               <p>{apiErrorMessage}</p>
             </div>
           )}
@@ -265,7 +291,7 @@ export const OwnerRegisterScreen: React.FC<OwnerRegisterScreenProps> = ({
               name="name"
               label="Nombre"
               placeholder="Ej: Laura"
-              icon="👤"
+              icon={<UserIcon size={16} />}
               disabled={lookupResult.exists}
             />
             <FormField
@@ -273,7 +299,7 @@ export const OwnerRegisterScreen: React.FC<OwnerRegisterScreenProps> = ({
               name="lastName"
               label="Apellidos"
               placeholder="Ej: Martínez Pérez"
-              icon="👤"
+              icon={<UserIcon size={16} />}
               disabled={lookupResult.exists}
             />
           </div>
@@ -284,7 +310,7 @@ export const OwnerRegisterScreen: React.FC<OwnerRegisterScreenProps> = ({
               name="phone"
               label="Teléfono de Contacto"
               placeholder="Ej: +584121234567"
-              icon="📞"
+              icon={<PhoneIcon size={16} />}
               disabled={lookupResult.exists}
             />
             <FormField
@@ -293,7 +319,7 @@ export const OwnerRegisterScreen: React.FC<OwnerRegisterScreenProps> = ({
               label="Correo Electrónico (Opcional)"
               placeholder="Ej: laura@ejemplo.com"
               type="email"
-              icon="✉️"
+              icon={<MailIcon size={16} />}
               disabled={lookupResult.exists}
             />
           </div>
@@ -303,7 +329,7 @@ export const OwnerRegisterScreen: React.FC<OwnerRegisterScreenProps> = ({
             name="address"
             label="Dirección de Habitación (Opcional)"
             placeholder="Ej: Av. Bolívar, Res. Los Olivos, Apto 4B"
-            icon="🏠"
+            icon={<HomeIcon size={16} />}
             disabled={lookupResult.exists}
           />
 

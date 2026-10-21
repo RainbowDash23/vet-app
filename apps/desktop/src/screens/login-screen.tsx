@@ -3,6 +3,8 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Button, Input } from '../components/ui';
+import { WarningIcon, LockIcon } from '../components/ui/icons';
+import { ApiError } from '../services/api.client';
 import { useAuth } from '../context/auth.context';
 import styles from './login-screen.module.css';
 
@@ -68,10 +70,19 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
         await authContext.login(values.email, values.password);
       }
       onSuccess?.();
-    } catch (err: any) {
-      const message =
-        err?.message ||
-        'Credenciales de acceso inválidas. Por favor verifica tu correo y contraseña.';
+    } catch (err: unknown) {
+      let message = 'Credenciales inválidas';
+      if (err instanceof ApiError) {
+        if (err.status === 401) {
+          message = 'Credenciales inválidas';
+        } else {
+          message = err.message || 'Error al comunicarse con el servidor';
+        }
+      } else if (err instanceof TypeError || (err instanceof Error && (err.message.includes('fetch') || err.message.includes('connect')))) {
+        message = 'No se pudo conectar con el servidor';
+      } else if (err instanceof Error) {
+        message = err.message;
+      }
       setFormError(message);
     }
   };
@@ -88,7 +99,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
       {activeErrorMessage && (
         <div role="alert" aria-live="assertive" className={styles.errorAlert}>
           <span className={styles.errorIcon} aria-hidden="true">
-            ⚠️
+            <WarningIcon size={16} />
           </span>
           <span>{activeErrorMessage}</span>
         </div>
@@ -131,7 +142,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
       </form>
 
       <div className={styles.securityNote}>
-        🔒 Autenticación protegida con tokens JWT. Cero credenciales persistidas en disco (RNF-2).
+        <LockIcon size={14} style={{ display: 'inline', verticalAlign: 'text-bottom', marginRight: '6px' }} />
+        Autenticación protegida con tokens JWT. Cero credenciales persistidas en disco (RNF-2).
       </div>
     </div>
   );

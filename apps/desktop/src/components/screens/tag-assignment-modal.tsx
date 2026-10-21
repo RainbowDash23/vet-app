@@ -10,6 +10,7 @@ import {
   Button,
   Input,
 } from '../ui';
+import { TagIcon, CheckIcon, PlusIcon } from '../ui/icons';
 import { petsService as defaultPetsService, PetsService } from '../../services/pets.service';
 import { ApiError } from '../../services/api.client';
 import styles from './tag-assignment-modal.module.css';
@@ -191,7 +192,7 @@ export const TagAssignmentModal: React.FC<TagAssignmentModalProps> = ({
         <DialogHeader className={styles.header}>
           <div className={styles.titleRow}>
             <div className={styles.iconBadge} aria-hidden="true">
-              🏷️
+              <TagIcon size={18} />
             </div>
             <div>
               <DialogTitle className={styles.title}>
@@ -310,7 +311,10 @@ export const TagAssignmentModal: React.FC<TagAssignmentModalProps> = ({
                       </span>
                     </div>
                     {isSelected && (
-                      <span className={styles.selectedBadge}>✓ Seleccionada</span>
+                      <span className={styles.selectedBadge}>
+                        <CheckIcon size={14} style={{ display: 'inline', verticalAlign: 'text-bottom', marginRight: '4px' }} />
+                        Seleccionada
+                      </span>
                     )}
                   </button>
                 );
@@ -343,7 +347,8 @@ export const TagAssignmentModal: React.FC<TagAssignmentModalProps> = ({
             variant="secondary"
             onClick={handleNewPet}
           >
-            ➕ Registrar Nueva Mascota con este UID
+            <PlusIcon size={14} style={{ display: 'inline', verticalAlign: 'text-bottom', marginRight: '4px' }} />
+            Registrar Nueva Mascota con este UID
           </Button>
         </div>
 

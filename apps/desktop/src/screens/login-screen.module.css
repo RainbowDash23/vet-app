@@ -1,3 +1,14 @@
+.pageWrapper {
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--color-bg-app);
+  padding: var(--space-4);
+  box-sizing: border-box;
+}
+
 .container {
   max-width: 440px;
   margin: auto;

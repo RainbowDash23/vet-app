@@ -16,6 +16,19 @@ import { PetsService, petsService as defaultPetsService, type VaccinationRecord 
 import { useNfcReader } from '../hooks/use-nfc-reader';
 import { useSafeDirtyGuard, type DirtyGuardState } from '../hooks/use-form-dirty-guard';
 import { Button } from '../components/ui';
+import {
+  PetIcon,
+  TagIcon,
+  WarningIcon,
+  CheckIcon,
+  LockIcon,
+  RadioIcon,
+  ScaleIcon,
+  ThermometerIcon,
+  HeartIcon,
+  LungsIcon,
+  TimerIcon,
+} from '../components/ui/icons';
 import { TagAssignmentModal } from '../components/screens/tag-assignment-modal';
 import styles from './patient-file-screen.module.css';
 
@@ -252,19 +265,8 @@ export const PatientFileScreen: React.FC<PatientFileScreenProps> = ({
     }
   };
 
-  const getSpeciesEmoji = (species: PetSpecies): string => {
-    switch (species) {
-      case PetSpecies.CANINE:
-        return '🐕';
-      case PetSpecies.FELINE:
-        return '🐈';
-      case PetSpecies.AVIAN:
-        return '🦜';
-      case PetSpecies.EQUINE:
-        return '🐎';
-      default:
-        return '🐾';
-    }
+  const getSpeciesAvatar = (_species: PetSpecies): React.ReactNode => {
+    return <PetIcon size={24} />;
   };
 
   const getSexLabel = (sex: PetSex): string => {
@@ -299,7 +301,9 @@ export const PatientFileScreen: React.FC<PatientFileScreenProps> = ({
     return (
       <div className={styles.container} role="main">
         <div className={styles.errorState} role="alert">
-          <span className={styles.stateIcon}>⚠️</span>
+          <span className={styles.stateIcon}>
+            <WarningIcon size={32} />
+          </span>
           <h2 className={styles.stateTitle}>No se pudo cargar la ficha</h2>
           <p className={styles.stateDescription}>{errorMessage}</p>
           <div style={{ display: 'flex', gap: 'var(--space-3)' }}>
@@ -338,7 +342,9 @@ export const PatientFileScreen: React.FC<PatientFileScreenProps> = ({
         </div>
 
         <div className={styles.emptyState} role="region" aria-labelledby="unregistered-title">
-          <span className={styles.stateIcon}>🏷️</span>
+          <span className={styles.stateIcon}>
+            <TagIcon size={32} />
+          </span>
           <h2 id="unregistered-title" className={styles.stateTitle}>
             Tag NFC No Registrado
           </h2>
@@ -393,7 +399,9 @@ export const PatientFileScreen: React.FC<PatientFileScreenProps> = ({
         </div>
 
         <div className={styles.emptyState}>
-          <span className={styles.stateIcon}>📡</span>
+          <span className={styles.stateIcon}>
+            <RadioIcon size={32} />
+          </span>
           <h2 className={styles.stateTitle}>Esperando lectura NFC</h2>
           <p className={styles.stateDescription}>
             Aproxime el llavero o tarjeta NFC del paciente al lector para desplegar de forma
@@ -463,7 +471,7 @@ export const PatientFileScreen: React.FC<PatientFileScreenProps> = ({
         <div className={styles.headerMain}>
           <div className={styles.petIdentity}>
             <div className={styles.speciesAvatar} aria-hidden="true">
-              {getSpeciesEmoji(pet.species)}
+              {getSpeciesAvatar(pet.species)}
             </div>
             <div>
               <h1 id="pet-title" className={styles.petName}>
@@ -478,10 +486,14 @@ export const PatientFileScreen: React.FC<PatientFileScreenProps> = ({
           <div className={styles.badgesGroup}>
             <span className={styles.tagBadge}>UID: {data.uid}</span>
             {isFullAccess ? (
-              <span className={styles.grantBadgeFull}>✓ Acceso Completo (NFC Tap)</span>
+              <span className={styles.grantBadgeFull}>
+                <CheckIcon size={14} style={{ display: 'inline', verticalAlign: 'text-bottom', marginRight: '4px' }} />
+                Acceso Completo (NFC Tap)
+              </span>
             ) : (
               <span className={styles.grantBadgeRestricted}>
-                ⚠️ Consentimiento Restringido (RF-21)
+                <WarningIcon size={14} style={{ display: 'inline', verticalAlign: 'text-bottom', marginRight: '4px' }} />
+                Consentimiento Restringido (RF-21)
               </span>
             )}
           </div>
@@ -527,7 +539,7 @@ export const PatientFileScreen: React.FC<PatientFileScreenProps> = ({
           aria-labelledby="restricted-consent-heading"
         >
           <span className={styles.bannerIcon} aria-hidden="true">
-            🔒
+            <LockIcon size={24} />
           </span>
           <div>
             <h2 id="restricted-consent-heading" className={styles.bannerTitle}>
@@ -600,7 +612,7 @@ export const PatientFileScreen: React.FC<PatientFileScreenProps> = ({
                   <div className={styles.vitalCard}>
                     <div className={styles.vitalHeader}>
                       <span>Peso</span>
-                      <span>⚖️</span>
+                      <ScaleIcon size={16} />
                     </div>
                     <div className={styles.vitalValue}>
                       {latestVisitWithVitals?.weight ?? '--'}
@@ -611,7 +623,7 @@ export const PatientFileScreen: React.FC<PatientFileScreenProps> = ({
                   <div className={styles.vitalCard}>
                     <div className={styles.vitalHeader}>
                       <span>Temperatura</span>
-                      <span>🌡️</span>
+                      <ThermometerIcon size={16} />
                     </div>
                     <div className={styles.vitalValue}>
                       {latestVisitWithVitals?.temperature ?? '--'}
@@ -622,7 +634,7 @@ export const PatientFileScreen: React.FC<PatientFileScreenProps> = ({
                   <div className={styles.vitalCard}>
                     <div className={styles.vitalHeader}>
                       <span>FC (Frec. Cardíaca)</span>
-                      <span>❤️</span>
+                      <HeartIcon size={16} />
                     </div>
                     <div className={styles.vitalValue}>
                       {latestVisitWithVitals?.heartRate ?? '--'}
@@ -633,7 +645,7 @@ export const PatientFileScreen: React.FC<PatientFileScreenProps> = ({
                   <div className={styles.vitalCard}>
                     <div className={styles.vitalHeader}>
                       <span>FR (Frec. Respiratoria)</span>
-                      <span>🫁</span>
+                      <LungsIcon size={16} />
                     </div>
                     <div className={styles.vitalValue}>
                       {latestVisitWithVitals?.respiratoryRate ?? '--'}
@@ -644,7 +656,7 @@ export const PatientFileScreen: React.FC<PatientFileScreenProps> = ({
                   <div className={styles.vitalCard}>
                     <div className={styles.vitalHeader}>
                       <span>TLLC (Llenado Capilar)</span>
-                      <span>⏱️</span>
+                      <TimerIcon size={16} />
                     </div>
                     <div className={styles.vitalValue}>
                       {latestVisitWithVitals?.capillaryRefillTime ?? '--'}

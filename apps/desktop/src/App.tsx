@@ -3,12 +3,14 @@ import type { ResolveTagSuccessDto } from '@vet-app/shared-types';
 import { MainLayout, ScreenId } from './components/layout';
 import { AuthProvider, useAuth } from './context/auth.context';
 import { LoginScreen } from './screens/login-screen';
+import loginStyles from './screens/login-screen.module.css';
 import { PetListScreen } from './screens/PetListScreen';
 import { PetRegisterScreen } from './screens/PetRegisterScreen';
 import { OwnerRegisterScreen } from './screens/OwnerRegisterScreen';
 import { PatientFileScreen } from './screens/patient-file-screen';
 import { VisitConsultationScreen } from './screens/visit-consultation-screen';
 import { ScheduleScreen } from './screens/schedule-screen';
+import { UsersScreen } from './screens/users-screen';
 import { UnsavedChangesDialog } from './components/screens/unsaved-changes-dialog';
 import {
   AlertDialog,
@@ -227,10 +229,22 @@ export const AppContent: React.FC<AppContentProps> = ({
       case 'appointments':
       case 'vet-agenda':
         return <ScheduleScreen clinicId={user?.clinicId} />;
+      case 'users':
+      case 'staff-management':
+        return <UsersScreen currentUserRole={role ?? undefined} />;
       default:
         return <PetListScreen />;
     }
   };
+
+  // Si no existe sesión autenticada, renderiza únicamente el formulario de login centrado sin MainLayout
+  if (!isAuthenticated) {
+    return (
+      <div className={loginStyles.pageWrapper}>
+        <LoginScreen onSuccess={handleLoginSuccess} />
+      </div>
+    );
+  }
 
   return (
     <DirtyGuardContext.Provider value={dirtyGuard}>

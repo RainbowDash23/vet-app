@@ -1,4 +1,5 @@
 import React from 'react';
+import { ClipboardIcon } from '../components/ui/icons';
 import styles from './PetListScreen.module.css';
 
 export const PetListScreen: React.FC = () => {
@@ -14,7 +15,9 @@ export const PetListScreen: React.FC = () => {
       </div>
 
       <div className={styles.emptyState}>
-        <span className={styles.emptyIcon}>📋</span>
+        <span className={styles.emptyIcon}>
+          <ClipboardIcon size={32} />
+        </span>
         <h3 style={{ fontSize: 'var(--font-size-lg)', color: 'var(--color-text-primary)' }}>
           Sin pacientes cargados aún
         </h3>
