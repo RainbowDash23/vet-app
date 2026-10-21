@@ -49,6 +49,7 @@ describe('E2E: Demostración de Fugas de Seguridad y Aislamiento Multi-Tenant (s
   const visitClinicAId = '33333333-aaaa-4333-8333-333333333333';
   const tagClinicAId = 'tag-1111-4111-8111-111111111111';
   const attachmentClinicAId = 'attachment-clinic-a-confidential-001';
+  const vaccinationClinicAId = 'vaccination-clinic-a-001';
 
   before(async () => {
     testContext = await createTestApp();
@@ -179,6 +180,22 @@ describe('E2E: Demostración de Fugas de Seguridad y Aislamiento Multi-Tenant (s
       ipAddress: '192.168.1.100',
       userAgent: 'Mozilla/5.0 Clinica-A-Terminal',
       timestamp: new Date(),
+    });
+
+    // Sembrar una vacunación aplicada en Clínica A
+    db.vaccinations.push({
+      id: vaccinationClinicAId,
+      petId: PET_1_ID,
+      clinicId: CLINIC_A_ID,
+      vetId: USER_VET_A_ID,
+      vaccineName: 'Rabia Anual Canina',
+      batchNumber: 'BATCH-2026-A',
+      applicationDate: new Date('2026-10-01T00:00:00.000Z'),
+      nextDueDate: new Date('2027-10-01T00:00:00.000Z'),
+      notes: 'Vacuna aplicada en Clínica A',
+      deletedAt: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
     });
 
     if (testContext.syncToPostgres) {
@@ -1107,4 +1124,372 @@ describe('E2E: Demostración de Fugas de Seguridad y Aislamiento Multi-Tenant (s
       );
     });
   });
+
+  describe('Barrido Exhaustivo de la Matriz de Acceso (Tabla 2)', () => {
+    describe('1. Módulo Pets (/pets)', () => {
+      it('DELETE /pets/:id por VET o RECEPTION de la propia clínica debe responder 403 Forbidden', async () => {
+        const resVet = await request(app.getHttpServer())
+          .delete('/pets/' + PET_1_ID)
+          .set('Authorization', 'Bearer ' + vetAToken);
+        assert.strictEqual(resVet.status, 403);
+
+        const resRec = await request(app.getHttpServer())
+          .delete('/pets/' + PET_1_ID)
+          .set('Authorization', 'Bearer ' + receptionAToken);
+        assert.strictEqual(resRec.status, 403);
+      });
+
+      it('DELETE /pets/:id de Clínica A por ADMIN de Clínica B debe responder 404 Not Found', async () => {
+        const res = await request(app.getHttpServer())
+          .delete('/pets/' + PET_1_ID)
+          .set('Authorization', 'Bearer ' + adminBToken);
+        assert.strictEqual(res.status, 404);
+      });
+
+      it('PATCH /pets/:id por VET de la propia clínica debe responder 403 Forbidden', async () => {
+        const res = await request(app.getHttpServer())
+          .patch('/pets/' + PET_1_ID)
+          .set('Authorization', 'Bearer ' + vetAToken)
+          .send({ name: 'Max Editado Por Vet' });
+        assert.strictEqual(res.status, 403);
+      });
+    });
+
+    describe('2. Módulo Owners (/owners)', () => {
+      it('POST /owners por VET debe responder 403 Forbidden', async () => {
+        const res = await request(app.getHttpServer())
+          .post('/owners')
+          .set('Authorization', 'Bearer ' + vetAToken)
+          .send({
+            documentId: 'VET-OWNER-DENIED',
+            name: 'Dueño',
+            lastName: 'Prohibido',
+            phone: '+593900000000',
+            email: 'vetowner@vetapp.com',
+          });
+        assert.strictEqual(res.status, 403);
+      });
+
+      it('POST /owners/lookup por VET debe responder 403 Forbidden', async () => {
+        const res = await request(app.getHttpServer())
+          .post('/owners/lookup')
+          .set('Authorization', 'Bearer ' + vetAToken)
+          .send({ documentId: 'DOC-12345678' });
+        assert.strictEqual(res.status, 403);
+      });
+
+      it('PATCH /owners/:id por VET debe responder 403 Forbidden', async () => {
+        const res = await request(app.getHttpServer())
+          .patch('/owners/' + OWNER_1_ID)
+          .set('Authorization', 'Bearer ' + vetAToken)
+          .send({ phone: '+593911111111' });
+        assert.strictEqual(res.status, 403);
+      });
+
+      it('PATCH /owners/:id de Clínica A por personal de Clínica B sin vínculo debe responder 404 Not Found', async () => {
+        const res = await request(app.getHttpServer())
+          .patch('/owners/' + OWNER_1_ID)
+          .set('Authorization', 'Bearer ' + adminBToken)
+          .send({ phone: '+593911111111' });
+        assert.strictEqual(res.status, 404);
+      });
+
+      it('DELETE /owners/:id por VET o RECEPTION de la propia clínica debe responder 403 Forbidden', async () => {
+        const resVet = await request(app.getHttpServer())
+          .delete('/owners/' + OWNER_1_ID)
+          .set('Authorization', 'Bearer ' + vetAToken);
+        assert.strictEqual(resVet.status, 403);
+
+        const resRec = await request(app.getHttpServer())
+          .delete('/owners/' + OWNER_1_ID)
+          .set('Authorization', 'Bearer ' + receptionAToken);
+        assert.strictEqual(resRec.status, 403);
+      });
+
+      it('DELETE /owners/:id de Clínica A por ADMIN de Clínica B debe responder 404 Not Found', async () => {
+        const res = await request(app.getHttpServer())
+          .delete('/owners/' + OWNER_1_ID)
+          .set('Authorization', 'Bearer ' + adminBToken);
+        assert.strictEqual(res.status, 404);
+      });
+    });
+
+    describe('3. Módulo Visits (/visits)', () => {
+      it('PATCH /visits/:id/attend por RECEPTION o ADMIN debe responder 403 Forbidden', async () => {
+        const resRec = await request(app.getHttpServer())
+          .patch('/visits/' + visitClinicAId + '/attend')
+          .set('Authorization', 'Bearer ' + receptionAToken)
+          .send({ notes: 'Intento recepcion' });
+        assert.strictEqual(resRec.status, 403);
+
+        const resAdmin = await request(app.getHttpServer())
+          .patch('/visits/' + visitClinicAId + '/attend')
+          .set('Authorization', 'Bearer ' + adminAToken)
+          .send({ notes: 'Intento admin' });
+        assert.strictEqual(resAdmin.status, 403);
+      });
+
+      it('PATCH /visits/:id/attend de Clínica A por VET de Clínica B debe responder 404 Not Found', async () => {
+        const res = await request(app.getHttpServer())
+          .patch('/visits/' + visitClinicAId + '/attend')
+          .set('Authorization', 'Bearer ' + vetBToken)
+          .send({ notes: 'Intento vet ajeno' });
+        assert.strictEqual(res.status, 404);
+      });
+
+      it('POST /visits/:id/close por RECEPTION o ADMIN debe responder 403 Forbidden', async () => {
+        const resRec = await request(app.getHttpServer())
+          .post('/visits/' + visitClinicAId + '/close')
+          .set('Authorization', 'Bearer ' + receptionAToken);
+        assert.strictEqual(resRec.status, 403);
+
+        const resAdmin = await request(app.getHttpServer())
+          .post('/visits/' + visitClinicAId + '/close')
+          .set('Authorization', 'Bearer ' + adminAToken);
+        assert.strictEqual(resAdmin.status, 403);
+      });
+
+      it('POST /visits/:id/close de Clínica A por VET de Clínica B debe responder 404 Not Found', async () => {
+        const res = await request(app.getHttpServer())
+          .post('/visits/' + visitClinicAId + '/close')
+          .set('Authorization', 'Bearer ' + vetBToken);
+        assert.strictEqual(res.status, 404);
+      });
+
+      it('POST /visits/:id/notes por RECEPTION o ADMIN debe responder 403 Forbidden', async () => {
+        const resRec = await request(app.getHttpServer())
+          .post('/visits/' + visitClinicAId + '/notes')
+          .set('Authorization', 'Bearer ' + receptionAToken)
+          .send({ content: 'Nota de evolucion invalida' });
+        assert.strictEqual(resRec.status, 403);
+
+        const resAdmin = await request(app.getHttpServer())
+          .post('/visits/' + visitClinicAId + '/notes')
+          .set('Authorization', 'Bearer ' + adminAToken)
+          .send({ content: 'Nota de evolucion invalida' });
+        assert.strictEqual(resAdmin.status, 403);
+      });
+
+      it('POST /visits/:id/notes de Clínica A por VET de Clínica B debe responder 404 Not Found', async () => {
+        const res = await request(app.getHttpServer())
+          .post('/visits/' + visitClinicAId + '/notes')
+          .set('Authorization', 'Bearer ' + vetBToken)
+          .send({ content: 'Nota de evolucion ajena' });
+        assert.strictEqual(res.status, 404);
+      });
+
+      it('GET /visits/history/pet/:petId por RECEPTION debe responder 403 Forbidden', async () => {
+        const res = await request(app.getHttpServer())
+          .get('/visits/history/pet/' + PET_1_ID)
+          .set('Authorization', 'Bearer ' + receptionAToken);
+        assert.strictEqual(res.status, 403);
+      });
+
+      it('GET /visits/history/pet/:petId de Clínica A por VET de Clínica B sin grant debe responder 404 o 403', async () => {
+        const res = await request(app.getHttpServer())
+          .get('/visits/history/pet/' + PET_1_ID)
+          .set('Authorization', 'Bearer ' + vetBToken);
+        assert.ok(res.status === 404 || res.status === 403);
+      });
+    });
+
+    describe('4. Módulo Tags (/tags)', () => {
+      it('POST /tags/assign por VET debe responder 403 Forbidden', async () => {
+        const res = await request(app.getHttpServer())
+          .post('/tags/assign')
+          .set('Authorization', 'Bearer ' + vetAToken)
+          .send({ uid: '04AABB112233', petId: PET_1_ID });
+        assert.strictEqual(res.status, 403);
+      });
+
+      it('PATCH /tags/:id/status por VET debe responder 403 Forbidden', async () => {
+        const res = await request(app.getHttpServer())
+          .patch('/tags/' + tagClinicAId + '/status')
+          .set('Authorization', 'Bearer ' + vetAToken)
+          .send({ status: TagStatus.DAMAGED });
+        assert.strictEqual(res.status, 403);
+      });
+    });
+
+    describe('5. Módulo Audit (/audit/access-logs)', () => {
+      it('GET /audit/access-logs por VET o RECEPTION debe responder 403 Forbidden', async () => {
+        const resVet = await request(app.getHttpServer())
+          .get('/audit/access-logs')
+          .set('Authorization', 'Bearer ' + vetAToken);
+        assert.strictEqual(resVet.status, 403);
+
+        const resRec = await request(app.getHttpServer())
+          .get('/audit/access-logs')
+          .set('Authorization', 'Bearer ' + receptionAToken);
+        assert.strictEqual(resRec.status, 403);
+      });
+
+      it('GET /audit/access-logs/pet/:petId por RECEPTION debe responder 403 Forbidden', async () => {
+        const res = await request(app.getHttpServer())
+          .get('/audit/access-logs/pet/' + PET_1_ID)
+          .set('Authorization', 'Bearer ' + receptionAToken);
+        assert.strictEqual(res.status, 403);
+      });
+    });
+
+    describe('6. Módulo Attachments (/attachments)', () => {
+      it('POST /attachments por RECEPTION debe responder 403 Forbidden', async () => {
+        const res = await request(app.getHttpServer())
+          .post('/attachments')
+          .set('Authorization', 'Bearer ' + receptionAToken)
+          .attach('file', Buffer.from('dummy-content'), 'test.pdf')
+          .field('petId', PET_1_ID);
+        assert.strictEqual(res.status, 403);
+      });
+
+      it('GET /attachments/pet/:petId por RECEPTION debe responder 403 Forbidden', async () => {
+        const res = await request(app.getHttpServer())
+          .get('/attachments/pet/' + PET_1_ID)
+          .set('Authorization', 'Bearer ' + receptionAToken);
+        assert.strictEqual(res.status, 403);
+      });
+
+      it('GET /attachments/pet/:petId de Clínica A por VET de Clínica B sin grant debe responder 404 o 403', async () => {
+        const res = await request(app.getHttpServer())
+          .get('/attachments/pet/' + PET_1_ID)
+          .set('Authorization', 'Bearer ' + vetBToken);
+        assert.ok(res.status === 404 || res.status === 403);
+      });
+
+      it('DELETE /attachments/:id por RECEPTION debe responder 403 Forbidden', async () => {
+        const res = await request(app.getHttpServer())
+          .delete('/attachments/' + attachmentClinicAId)
+          .set('Authorization', 'Bearer ' + receptionAToken);
+        assert.strictEqual(res.status, 403);
+      });
+
+      it('GET /attachments/:id/download de Clínica A por VET de Clínica B sin grant debe responder 404 o 403', async () => {
+        const res = await request(app.getHttpServer())
+          .get('/attachments/' + attachmentClinicAId + '/download')
+          .set('Authorization', 'Bearer ' + vetBToken);
+        assert.ok(res.status === 404 || res.status === 403);
+      });
+    });
+
+    describe('7. Módulo Vaccinations (/vaccinations)', () => {
+      it('POST /vaccinations por RECEPTION o ADMIN debe responder 403 Forbidden', async () => {
+        const body = {
+          petId: PET_1_ID,
+          vaccineName: 'Rabia',
+          batchNumber: 'BATCH-DENIED',
+          applicationDate: '2026-10-01T00:00:00.000Z',
+        };
+        const resRec = await request(app.getHttpServer())
+          .post('/vaccinations')
+          .set('Authorization', 'Bearer ' + receptionAToken)
+          .send(body);
+        assert.strictEqual(resRec.status, 403);
+
+        const resAdmin = await request(app.getHttpServer())
+          .post('/vaccinations')
+          .set('Authorization', 'Bearer ' + adminAToken)
+          .send(body);
+        assert.strictEqual(resAdmin.status, 403);
+      });
+
+      it('GET /vaccinations/pet/:petId por RECEPTION debe responder 403 Forbidden', async () => {
+        const res = await request(app.getHttpServer())
+          .get('/vaccinations/pet/' + PET_1_ID)
+          .set('Authorization', 'Bearer ' + receptionAToken);
+        assert.strictEqual(res.status, 403);
+      });
+
+      it('GET /vaccinations/pet/:petId de Clínica A por VET de Clínica B sin grant debe responder 404 o 403', async () => {
+        const res = await request(app.getHttpServer())
+          .get('/vaccinations/pet/' + PET_1_ID)
+          .set('Authorization', 'Bearer ' + vetBToken);
+        assert.ok(res.status === 404 || res.status === 403);
+      });
+
+      it('GET /vaccinations/:id de Clínica A por VET de Clínica B debe responder 404 Not Found', async () => {
+        const res = await request(app.getHttpServer())
+          .get('/vaccinations/' + vaccinationClinicAId)
+          .set('Authorization', 'Bearer ' + vetBToken);
+        assert.strictEqual(res.status, 404);
+      });
+    });
+
+    describe('8. Módulo Clinics (/clinics)', () => {
+      it('POST /clinics por VET o RECEPTION debe responder 403 Forbidden', async () => {
+        const clinicBody = {
+          name: 'Clínica Prohibida',
+          code: 'CLINIC-DENIED',
+          address: 'Calle Falsa 123',
+          phone: '+593900000000',
+          email: 'denied@vetapp.com',
+        };
+        const resVet = await request(app.getHttpServer())
+          .post('/clinics')
+          .set('Authorization', 'Bearer ' + vetAToken)
+          .send(clinicBody);
+        assert.strictEqual(resVet.status, 403);
+
+        const resRec = await request(app.getHttpServer())
+          .post('/clinics')
+          .set('Authorization', 'Bearer ' + receptionAToken)
+          .send(clinicBody);
+        assert.strictEqual(resRec.status, 403);
+      });
+
+      it('PATCH /clinics/current por VET o RECEPTION debe responder 403 Forbidden', async () => {
+        const resVet = await request(app.getHttpServer())
+          .patch('/clinics/current')
+          .set('Authorization', 'Bearer ' + vetAToken)
+          .send({ name: 'Nuevo Nombre Prohibido' });
+        assert.strictEqual(resVet.status, 403);
+
+        const resRec = await request(app.getHttpServer())
+          .patch('/clinics/current')
+          .set('Authorization', 'Bearer ' + receptionAToken)
+          .send({ name: 'Nuevo Nombre Prohibido' });
+        assert.strictEqual(resRec.status, 403);
+      });
+
+      it('GET /clinics/:id por VET o RECEPTION debe responder 403 Forbidden', async () => {
+        const resVet = await request(app.getHttpServer())
+          .get('/clinics/' + CLINIC_A_ID)
+          .set('Authorization', 'Bearer ' + vetAToken);
+        assert.strictEqual(resVet.status, 403);
+
+        const resRec = await request(app.getHttpServer())
+          .get('/clinics/' + CLINIC_A_ID)
+          .set('Authorization', 'Bearer ' + receptionAToken);
+        assert.strictEqual(resRec.status, 403);
+      });
+
+      it('PATCH /clinics/:id por VET o RECEPTION debe responder 403 Forbidden', async () => {
+        const resVet = await request(app.getHttpServer())
+          .patch('/clinics/' + CLINIC_A_ID)
+          .set('Authorization', 'Bearer ' + vetAToken)
+          .send({ name: 'Nuevo Nombre Prohibido' });
+        assert.strictEqual(resVet.status, 403);
+
+        const resRec = await request(app.getHttpServer())
+          .patch('/clinics/' + CLINIC_A_ID)
+          .set('Authorization', 'Bearer ' + receptionAToken)
+          .send({ name: 'Nuevo Nombre Prohibido' });
+        assert.strictEqual(resRec.status, 403);
+      });
+
+      it('GET /clinics/current por RECEPTION o VET debe responder 200 OK con su propia clínica', async () => {
+        const resRec = await request(app.getHttpServer())
+          .get('/clinics/current')
+          .set('Authorization', 'Bearer ' + receptionAToken);
+        assert.strictEqual(resRec.status, 200);
+        assert.strictEqual(resRec.body.id, CLINIC_A_ID);
+
+        const resVet = await request(app.getHttpServer())
+          .get('/clinics/current')
+          .set('Authorization', 'Bearer ' + vetAToken);
+        assert.strictEqual(resVet.status, 200);
+        assert.strictEqual(resVet.body.id, CLINIC_A_ID);
+      });
+    });
+  });
+
 });
