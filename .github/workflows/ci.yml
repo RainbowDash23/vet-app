@@ -26,6 +26,14 @@ jobs:
           --health-timeout 5s
           --health-retries 5
 
+    env:
+      POSTGRES_USER: vet_admin
+      POSTGRES_PASSWORD: ci_test_password_secure
+      POSTGRES_DB: vet_app_db
+      POSTGRES_PORT: '5432'
+      DATABASE_URL: 'postgresql://vet_admin:ci_test_password_secure@localhost:5432/vet_app_db?schema=public'
+      JWT_SECRET: 'ci_jwt_secret_must_be_at_least_32_characters_long_super_secure'
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -48,6 +56,9 @@ jobs:
       - name: Generate Prisma Client
         run: pnpm prisma:generate
 
+      - name: Deploy Prisma migrations to PostgreSQL service
+        run: pnpm --filter @vet-app/api exec prisma migrate deploy
+
       - name: Typecheck
         run: pnpm typecheck
 
@@ -59,24 +70,11 @@ jobs:
 
       - name: Run in-memory E2E tests
         run: pnpm test:e2e
-        env:
-          POSTGRES_USER: vet_admin
-          POSTGRES_PASSWORD: ci_test_password_secure
-          POSTGRES_DB: vet_app_db
-          POSTGRES_PORT: '5432'
-          DATABASE_URL: 'postgresql://vet_admin:ci_test_password_secure@localhost:5432/vet_app_db?schema=public'
-
-      - name: Deploy Prisma migrations to PostgreSQL service
-        run: pnpm --filter @vet-app/api exec prisma migrate deploy
-        env:
-          DATABASE_URL: 'postgresql://vet_admin:ci_test_password_secure@localhost:5432/vet_app_db?schema=public'
 
       - name: Run real database E2E tests
         run: pnpm run test:e2e:db
         env:
           USE_REAL_DB: 'true'
-          POSTGRES_USER: vet_admin
-          POSTGRES_PASSWORD: ci_test_password_secure
-          POSTGRES_DB: vet_app_db
-          POSTGRES_PORT: '5432'
-          DATABASE_URL: 'postgresql://vet_admin:ci_test_password_secure@localhost:5432/vet_app_db?schema=public'
+
+      - name: Run desktop UI tests
+        run: pnpm --filter @vet-app/desktop run test:ui

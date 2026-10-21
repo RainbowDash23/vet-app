@@ -46,7 +46,7 @@ const res = spawnSync(
     '--test',
     '--test-concurrency=1',
     'test/access-policy-leaks.e2e-spec.ts',
-    'test/rollback.e2e-spec.ts',
+    'test/rollback.db-spec.ts',
   ],
   {
     stdio: 'inherit',
