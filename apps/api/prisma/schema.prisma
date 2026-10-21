@@ -54,6 +54,7 @@ enum AccessAction {
   MANUAL_LOOKUP
   HISTORY_VIEW
   EMERGENCY_SCAN
+  NFC_SCAN_DENIED
 }
 
 enum GrantSource {

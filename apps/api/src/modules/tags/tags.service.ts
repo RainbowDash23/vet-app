@@ -82,7 +82,7 @@ export class TagsService {
           petId: tag.petId,
           clinicId,
           userId,
-          action: AccessAction.NFC_SCAN,
+          action: AccessAction.NFC_SCAN_DENIED,
           ipAddress,
           userAgent,
         });

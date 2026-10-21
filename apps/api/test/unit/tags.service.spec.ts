@@ -338,7 +338,7 @@ describe('TagsService & TagsController (T16 / RF-28, RF-29, RF-30, RF-31, RF-32,
       assert.ok(loggedData, 'Debe registrar la traza en AccessLog');
       assert.strictEqual(loggedData.petId, samplePetId);
       assert.strictEqual(loggedData.clinicId, sampleClinicId);
-      assert.strictEqual(loggedData.action, AccessAction.NFC_SCAN);
+      assert.strictEqual(loggedData.action, AccessAction.NFC_SCAN_DENIED);
 
       // NO debe conceder AccessGrant
       assert.strictEqual(grantCalled, false, 'No debe emitir AccessGrant ante status REVOKED');

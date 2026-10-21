@@ -927,11 +927,11 @@ describe('E2E: Demostración de Fugas de Seguridad y Aislamiento Multi-Tenant (s
       // Traza en AccessLog debe registrarse
       if (testContext.isRealDb) {
         const latestLog = await testContext.prisma.accessLog.findFirst({
-          where: { petId: pet7Id, clinicId: CLINIC_B_ID, action: AccessAction.NFC_SCAN },
+          where: { petId: pet7Id, clinicId: CLINIC_B_ID, action: AccessAction.NFC_SCAN_DENIED },
           orderBy: { timestamp: 'desc' },
         });
         assert.ok(latestLog, 'Debe existir la traza en AccessLog en PostgreSQL');
-        assert.strictEqual(latestLog.action, AccessAction.NFC_SCAN);
+        assert.strictEqual(latestLog.action, AccessAction.NFC_SCAN_DENIED);
 
         // NO debe existir AccessGrant activo para Clínica B y pet7
         const grant = await testContext.prisma.accessGrant.findFirst({
@@ -940,7 +940,7 @@ describe('E2E: Demostración de Fugas de Seguridad y Aislamiento Multi-Tenant (s
         assert.strictEqual(grant, null, 'No debe emitirse AccessGrant ante status REVOKED');
       } else {
         const latestLog = db.accessLogs.find(
-          (l: any) => l.petId === pet7Id && l.clinicId === CLINIC_B_ID && l.action === AccessAction.NFC_SCAN,
+          (l: any) => l.petId === pet7Id && l.clinicId === CLINIC_B_ID && l.action === AccessAction.NFC_SCAN_DENIED,
         );
         assert.ok(latestLog, 'Debe existir la traza en AccessLog');
         const grant = db.accessGrants.find(

@@ -230,4 +230,115 @@ describe('E2E: Portal Público de Contingencia y Rescate (emergency.e2e-spec.ts)
       assert.strictEqual(res.status, 404);
     });
   });
+
+describe('5. Portal Público de Rescate SSR HTML (RF-64)', () => {
+    it('debe responder HTML sanitizado y escapar caracteres para prevenir XSS en el nombre de la mascota (<script>)', async () => {
+      const xssPetId = crypto.randomUUID();
+      const xssCode = crypto.randomUUID();
+
+      db.pets.push({
+        id: xssPetId,
+        name: '<script>alert("XSS")</script>',
+        species: 'FELINE',
+        breed: 'Siames',
+        birthDate: new Date('2020-01-01'),
+        reproductiveStatus: 'INTACT',
+        sex: 'FEMALE',
+        ownerId: OWNER_1_ID,
+        deletedAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+
+      db.tags.push({
+        id: crypto.randomUUID(),
+        uid: 'XSS001122334',
+        publicCode: xssCode,
+        status: TagStatus.ACTIVE,
+        petId: xssPetId,
+        deletedAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+
+      const res = await request(app.getHttpServer()).get(`/p/${xssCode}`);
+
+      assert.strictEqual(res.status, 200);
+      assert.ok(res.headers['content-type']?.includes('text/html'), 'Debe responder con text/html');
+      assert.ok(
+        res.text.includes('&lt;script&gt;alert(&quot;XSS&quot;)&lt;/script&gt;') ||
+          res.text.includes('&lt;script&gt;alert(&#039;XSS&#039;)&lt;/script&gt;') ||
+          res.text.includes('&lt;script&gt;'),
+        'El nombre de la mascota debe estar sanitizado contra XSS',
+      );
+      assert.strictEqual(
+        res.text.includes('<script>alert("XSS")</script>'),
+        false,
+        'No debe contener el script sin escapar',
+      );
+      assert.strictEqual(res.text.includes('<script'), false, 'No debe contener tags script ejecutables');
+    });
+
+    it('debe responder HTTP 404 con página HTML amigable ante publicCode inexistente o tag inactivo', async () => {
+      const nonExistentCode = crypto.randomUUID();
+      const res = await request(app.getHttpServer()).get(`/p/${nonExistentCode}`);
+
+      assert.strictEqual(res.status, 404);
+      assert.ok(res.headers['content-type']?.includes('text/html'), 'Debe responder con text/html');
+      assert.ok(
+        res.text.toLowerCase().includes('no encontrad') ||
+          res.text.toLowerCase().includes('inactiv') ||
+          res.text.toLowerCase().includes('404'),
+        'Debe incluir mensaje amigable de no encontrado o inactivo',
+      );
+    });
+
+    it('debe responder HTTP 429 tras superar el límite del throttler', async () => {
+      let throttled = false;
+      for (let i = 0; i < 20; i++) {
+        const res = await request(app.getHttpServer())
+          .get(`/p/${TAG_1_PUBLIC_CODE}`)
+          .set('x-forwarded-for', '203.0.113.199');
+        if (res.status === 429) {
+          throttled = true;
+          break;
+        }
+      }
+      assert.strictEqual(throttled, true, 'Debe responder HTTP 429 Too Many Requests tras superar el límite');
+    });
+
+    it('debe comprobar que el HTML no expone cédula, email ni dirección física del dueño', async () => {
+      const owner = db.owners.find((o) => o.id === OWNER_1_ID);
+      assert.ok(owner, 'Dueño 1 debe existir');
+
+      const res = await request(app.getHttpServer()).get(`/p/${TAG_1_PUBLIC_CODE}`);
+
+      assert.strictEqual(res.status, 200);
+      assert.ok(res.text.includes('Max'), 'Debe contener nombre de la mascota');
+      assert.ok(res.text.includes('Carlos Mendoza'), 'Debe contener nombre del dueño');
+      assert.ok(res.text.includes('+593991234567'), 'Debe contener teléfono del dueño');
+
+      if (owner.documentId) {
+        assert.strictEqual(
+          res.text.includes(owner.documentId),
+          false,
+          'El HTML no debe contener el documentId del dueño',
+        );
+      }
+      if (owner.email) {
+        assert.strictEqual(
+          res.text.includes(owner.email),
+          false,
+          'El HTML no debe contener el email del dueño',
+        );
+      }
+      if (owner.address) {
+        assert.strictEqual(
+          res.text.includes(owner.address),
+          false,
+          'El HTML no debe contener la dirección del dueño',
+        );
+      }
+    });
+  });
 });

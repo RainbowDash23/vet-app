@@ -3,6 +3,7 @@ export enum AccessAction {
   MANUAL_LOOKUP = 'MANUAL_LOOKUP',
   HISTORY_VIEW = 'HISTORY_VIEW',
   EMERGENCY_SCAN = 'EMERGENCY_SCAN',
+  NFC_SCAN_DENIED = 'NFC_SCAN_DENIED',
 }
 
 Object.freeze(AccessAction);
