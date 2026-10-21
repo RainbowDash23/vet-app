@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { AccessLog, Prisma } from '@prisma/client';
 import { PaginatedResult } from '@vet-app/shared-types';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -105,13 +105,47 @@ export class AccessLogsService {
    */
   async findByPetId(
     petId: string,
-    page: number = 1,
-    limit: number = 10,
+    clinicId: string,
+    page = 1,
+    limit = 10,
   ): Promise<PaginatedResult<AccessLog>> {
+    if (!clinicId) {
+      throw new UnauthorizedException('Identificador de clínica no disponible en la sesión');
+    }
+
+    const pageNum = Math.max(1, Number(page) || 1);
+    const limitNum = Math.max(1, Math.min(100, Number(limit) || 10));
+
+    const now = new Date();
+    const pet = await this.prisma.pet.findFirst({
+      where: { id: petId, deletedAt: null },
+    });
+
+    if (!pet) {
+      throw new NotFoundException('Mascota no encontrada o inactiva');
+    }
+
+    const isOrigin = pet.createdByClinicId === clinicId;
+    const clinicVisitsCount = await this.prisma.visit.count({
+      where: { petId, clinicId, deletedAt: null },
+    });
+    const activeGrantsCount = await this.prisma.accessGrant.count({
+      where: {
+        petId,
+        clinicId,
+        revokedAt: null,
+        expiresAt: { gt: now },
+      },
+    });
+
+    if (!isOrigin && clinicVisitsCount === 0 && activeGrantsCount === 0) {
+      throw new NotFoundException('Mascota no encontrada o sin consentimiento activo');
+    }
+
     return this.findAll({
       petId,
-      page,
-      limit,
+      page: pageNum,
+      limit: limitNum,
     });
   }
 }

@@ -35,11 +35,13 @@ export class PetsController {
   constructor(private readonly petsService: PetsService) {}
 
   /**
-   * Registro de una nueva mascota vinculada a un dueño (RF-17, RF-18, RF-60).
+   * Registro de una nueva mascota vinculada a un dueño (RF-17, RF-18, RF-60, RF-63).
    * Registra createdByClinicId y valida el vínculo asistencial con el dueño.
+   * Restringido a los roles RECEPTION y ADMIN (RF-63).
    */
   @Post()
   @HttpCode(HttpStatus.CREATED)
+  @Roles(Role.RECEPTION, Role.ADMIN)
   async create(
     @CurrentClinicId() clinicId: string,
     @Body() createPetDto: CreatePetDto,
@@ -53,11 +55,17 @@ export class PetsController {
   }
 
   /**
-   * Búsqueda y listado paginado estándar de mascotas.
+   * Búsqueda y listado paginado estándar de mascotas asociadas a la clínica autenticada (RF-63).
    */
   @Get()
-  async findAll(@Query() query: SearchPetQueryDto): Promise<PaginatedResult<Pet>> {
-    return this.petsService.findAll(query);
+  async findAll(
+    @CurrentClinicId() clinicId: string,
+    @Query() query: SearchPetQueryDto,
+  ): Promise<PaginatedResult<Pet>> {
+    if (!clinicId) {
+      throw new UnauthorizedException('Identificador de clínica no disponible en la sesión');
+    }
+    return this.petsService.findAll(query, clinicId);
   }
 
   /**

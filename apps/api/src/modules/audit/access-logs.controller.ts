@@ -50,12 +50,14 @@ export class AccessLogsController {
   @Get('pet/:petId')
   @Roles(Role.ADMIN, Role.VET)
   async findByPetId(
+    @CurrentClinicId() clinicId: string,
     @Param('petId', ParseUUIDPipe) petId: string,
-    @Query('page') page?: number,
-    @Query('limit') limit?: number,
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 10,
   ): Promise<PaginatedResult<AccessLog>> {
-    const pageNum = page ? Number(page) : 1;
-    const limitNum = limit ? Number(limit) : 10;
-    return this.accessLogsService.findByPetId(petId, pageNum, limitNum);
+    if (!clinicId) {
+      throw new UnauthorizedException('Identificador de clínica no disponible en la sesión');
+    }
+    return this.accessLogsService.findByPetId(petId, clinicId, Number(page) || 1, Number(limit) || 10);
   }
 }

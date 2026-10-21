@@ -137,6 +137,24 @@ describe('AccessLogsService & AccessLogsController (T14 / RF-25, RF-37, RNF-7)',
           return filtered.length;
         },
       },
+      pet: {
+        findFirst: async ({ where }: any) => {
+          if (where?.id === validPetId && where?.deletedAt === null) {
+            return {
+              id: validPetId,
+              createdByClinicId: validClinicId,
+              deletedAt: null,
+            };
+          }
+          return null;
+        },
+      },
+      visit: {
+        count: async () => 0,
+      },
+      accessGrant: {
+        count: async () => 0,
+      },
     };
 
     accessLogsService = new AccessLogsService(mockPrisma as PrismaService);
@@ -297,7 +315,7 @@ describe('AccessLogsService & AccessLogsController (T14 / RF-25, RF-37, RNF-7)',
     });
 
     it('findByPetId debe retornar el historial cronológico de la mascota paginado', async () => {
-      const result = await accessLogsService.findByPetId(validPetId, 1, 5);
+      const result = await accessLogsService.findByPetId(validPetId, validClinicId, 1, 5);
 
       assert.ok(result.data);
       assert.strictEqual(result.meta.total, 3);
@@ -306,12 +324,12 @@ describe('AccessLogsService & AccessLogsController (T14 / RF-25, RF-37, RNF-7)',
       result.data.forEach((log: MockAccessLog) => assert.strictEqual(log.petId, validPetId));
     });
 
-    it('findByPetId con una mascota inexistente debe retornar lista vacía con total 0', async () => {
+    it('findByPetId con una mascota inexistente debe retornar 404 NotFound', async () => {
       const nonExistentPetId = 'ffffffff-ffff-ffff-ffff-ffffffffffff';
-      const result = await accessLogsService.findByPetId(nonExistentPetId);
-
-      assert.strictEqual(result.data.length, 0);
-      assert.strictEqual(result.meta.total, 0);
+      await assert.rejects(
+        () => accessLogsService.findByPetId(nonExistentPetId, validClinicId),
+        /NotFoundException|no encontrada/,
+      );
     });
   });
 
@@ -335,7 +353,7 @@ describe('AccessLogsService & AccessLogsController (T14 / RF-25, RF-37, RNF-7)',
     });
 
     it('findByPetId en controlador debe delegar a service.findByPetId()', async () => {
-      const response = await accessLogsController.findByPetId(validPetId, 1, 10);
+      const response = await accessLogsController.findByPetId(validClinicId, validPetId, 1, 10);
       assert.strictEqual(response.meta.total, 3);
       assert.strictEqual(response.data[0].petId, validPetId);
     });

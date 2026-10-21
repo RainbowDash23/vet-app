@@ -805,15 +805,16 @@ describe('TagsService & TagsController (T16 / RF-28, RF-29, RF-30, RF-31, RF-32,
       assert.ok(roles.includes(Role.ADMIN));
 
       let assignedDto: any = null;
-      tagsService.assignTag = async (dto) => {
-        assignedDto = dto;
+      tagsService.assignTag = async (dto, clinicId) => {
+        assignedDto = { ...dto, clinicId };
         return { id: 'tag-assigned-1', ...dto } as any;
       };
 
       const dto: AssignTagDto = { uid: sampleUid, petId: samplePetId };
-      const res = await tagsController.assign(dto);
+      const res = await tagsController.assign(sampleClinicId, dto);
       assert.strictEqual(res.id, 'tag-assigned-1');
       assert.strictEqual(assignedDto.uid, sampleUid);
+      assert.strictEqual(assignedDto.clinicId, sampleClinicId);
     });
 
     it('PATCH /tags/:id/status debe tener @Roles(Role.RECEPTION, Role.ADMIN) y delegar a reportStatus', async () => {

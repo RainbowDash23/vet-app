@@ -59,8 +59,14 @@ export class TagsController {
   @Post('assign')
   @Roles(Role.RECEPTION, Role.ADMIN)
   @HttpCode(HttpStatus.CREATED)
-  async assign(@Body() assignTagDto: AssignTagDto): Promise<Tag> {
-    return this.tagsService.assignTag(assignTagDto);
+  async assign(
+    @CurrentClinicId() clinicId: string,
+    @Body() assignTagDto: AssignTagDto,
+  ): Promise<Tag> {
+    if (!clinicId) {
+      throw new UnauthorizedException('Identificador de clínica no disponible en la sesión');
+    }
+    return this.tagsService.assignTag(assignTagDto, clinicId);
   }
 
   /**

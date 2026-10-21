@@ -177,16 +177,31 @@ export class TagsService {
    * Asocia un UID físico libre a una mascota registrada en el sistema (RF-30, RF-31).
    * Valida existencia de la mascota y previene colisiones con tags activos en el sistema o para la mascota.
    */
-  async assignTag(assignDto: AssignTagDto): Promise<Tag> {
+  async assignTag(assignDto: AssignTagDto, clinicId?: string): Promise<Tag> {
     const pet = await this.prisma.pet.findFirst({
       where: {
         id: assignDto.petId,
         deletedAt: null,
       },
+      include: {
+        visits: { where: { deletedAt: null } },
+      },
     });
 
     if (!pet) {
-      throw new NotFoundException(`Mascota con ID '${assignDto.petId}' no encontrada o inactiva`);
+      throw new NotFoundException('Mascota con ID ' + assignDto.petId + ' no encontrada o inactiva');
+    }
+
+    if (clinicId) {
+      const isOrigin = pet.createdByClinicId === clinicId;
+      const hasVisitsInClinic = pet.visits?.some((v: any) => v.clinicId === clinicId);
+      const hasGrant = this.accessGrantsService
+        ? await this.accessGrantsService.hasActiveGrant(assignDto.petId, clinicId)
+        : false;
+
+      if (!isOrigin && !hasVisitsInClinic && !hasGrant) {
+        throw new NotFoundException('Mascota con ID ' + assignDto.petId + ' no encontrada o inactiva');
+      }
     }
 
     const existingTagWithUid = await this.prisma.tag.findFirst({

@@ -78,14 +78,67 @@ export class PetsService {
    * Búsqueda y listado paginado estándar de mascotas activas (deletedAt: null).
    * Permite filtrar por ownerId, species o término de búsqueda (query).
    */
-  async findAll(queryDto: SearchPetQueryDto): Promise<PaginatedResult<Pet>> {
+  async findAll(queryDto: SearchPetQueryDto, clinicId?: string): Promise<PaginatedResult<Pet>> {
     const page = queryDto.page && queryDto.page >= 1 ? queryDto.page : 1;
     const limit = queryDto.limit && queryDto.limit >= 1 ? Math.min(100, queryDto.limit) : 10;
     const skip = (page - 1) * limit;
     const take = limit;
 
+    let candidatePetIds: string[] | null = null;
+    if (clinicId) {
+      const now = new Date();
+      const [originPets, clinicVisits, activeGrants] = await Promise.all([
+        this.prisma.pet.findMany({
+          where: { createdByClinicId: clinicId, deletedAt: null },
+          select: { id: true },
+        }),
+        this.prisma.visit?.findMany
+          ? this.prisma.visit.findMany({
+              where: { clinicId, deletedAt: null },
+              select: { petId: true },
+            })
+          : Promise.resolve([]),
+        this.prisma.accessGrant?.findMany
+          ? this.prisma.accessGrant.findMany({
+              where: {
+                clinicId,
+                revokedAt: null,
+                expiresAt: { gt: now },
+              },
+              select: { petId: true },
+            })
+          : Promise.resolve([]),
+      ]);
+
+      const allowedSet = new Set<string>([
+        ...originPets.map((p: any) => p.id),
+        ...clinicVisits.map((v: any) => v.petId),
+        ...activeGrants.map((g: any) => g.petId),
+      ]);
+
+      candidatePetIds = Array.from(allowedSet);
+
+      if (candidatePetIds.length === 0) {
+        return {
+          data: [],
+          meta: {
+            total: 0,
+            page,
+            limit,
+            totalPages: 0,
+            hasNextPage: false,
+            hasPrevPage: false,
+          },
+        };
+      }
+    }
+
     const where: Prisma.PetWhereInput = {
       deletedAt: null,
+    };
+
+    if (candidatePetIds !== null) {
+      where.id = { in: candidatePetIds };
     };
 
     if (queryDto.ownerId) {

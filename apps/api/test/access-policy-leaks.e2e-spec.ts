@@ -43,6 +43,8 @@ describe('E2E: Demostración de Fugas de Seguridad y Aislamiento Multi-Tenant (s
   let vetBToken: string;
   let adminBToken: string;
   let adminAToken: string;
+  let vetAToken: string;
+  let receptionAToken: string;
   let testContext: any;
   const visitClinicAId = '33333333-aaaa-4333-8333-333333333333';
   const tagClinicAId = 'tag-1111-4111-8111-111111111111';
@@ -62,6 +64,25 @@ describe('E2E: Demostración de Fugas de Seguridad y Aislamiento Multi-Tenant (s
       });
     assert.strictEqual(loginAdminA.status, 200);
     adminAToken = loginAdminA.body.accessToken;
+    // Login Veterinario de Clínica A
+    const loginVetA = await request(app.getHttpServer())
+      .post('/auth/login')
+      .send({
+        email: 'vet@vetapp.com',
+        password: SEED_PASSWORDS.vet,
+      });
+    assert.strictEqual(loginVetA.status, 200);
+    vetAToken = loginVetA.body.accessToken;
+
+    // Login Recepción de Clínica A
+    const loginRecA = await request(app.getHttpServer())
+      .post('/auth/login')
+      .send({
+        email: 'reception@vetapp.com',
+        password: SEED_PASSWORDS.reception,
+      });
+    assert.strictEqual(loginRecA.status, 200);
+    receptionAToken = loginRecA.body.accessToken;
 
     // Asignar notas clínicas confidenciales a la mascota de Clínica A
     const pet1 = db.pets.find((p) => p.id === PET_1_ID);
@@ -1020,6 +1041,70 @@ describe('E2E: Demostración de Fugas de Seguridad y Aislamiento Multi-Tenant (s
         assert.strictEqual(renewed.status, 'ACTIVE');
         assert.ok(renewed.expiresAt > new Date(Date.now() + 25 * 86400000));
       }
+    });
+  });
+
+  describe('Fuga 13: Usuario VET intenta crear mascota vía POST /pets (RF-63)', () => {
+    it('debe denegar con HTTP 403 Forbidden la creación de mascota por usuario con rol VET', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/pets')
+        .set('Authorization', 'Bearer ' + vetAToken)
+        .send({
+          name: 'Mascota Intento Vet',
+          species: 'CANINE',
+          breed: 'Criollo',
+          birthDate: '2023-01-01T00:00:00.000Z',
+          ownerId: OWNER_1_ID,
+        });
+      assert.strictEqual(
+        res.status,
+        403,
+        'Brecha RBAC: Se esperaba HTTP 403 Forbidden pero se obtuvo HTTP ' + res.status + '. VET pudo crear una mascota vía POST /pets.',
+      );
+    });
+  });
+
+  describe('Fuga 14: Clínica B lista GET /pets y visualiza mascota ajena de Clínica A (RF-63)', () => {
+    it('no debe incluir mascotas exclusivas de Clínica A en el listado GET /pets de Clínica B', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/pets')
+        .set('Authorization', 'Bearer ' + vetBToken);
+      assert.strictEqual(res.status, 200);
+      const petIds = res.body.data.map((p: any) => p.id);
+      assert.strictEqual(
+        petIds.includes(PET_1_ID),
+        false,
+        'Brecha multi-tenant: Clínica B pudo listar la mascota ' + PET_1_ID + ' perteneciente a Clínica A sin vínculo ni grant.',
+      );
+    });
+  });
+
+  describe('Fuga 15: Clínica B intenta asignar un tag NFC a paciente ajeno vía POST /tags/assign (RF-63)', () => {
+    it('debe denegar con HTTP 404 Not Found la asignación de un tag a una mascota de otra clínica sin vínculo ni grant', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/tags/assign')
+        .set('Authorization', 'Bearer ' + adminBToken)
+        .send({
+          uid: '04AABB998877',
+          petId: PET_1_ID,
+        });
+      assert.strictEqual(
+        res.status,
+        404,
+        'Brecha multi-tenant: Se esperaba HTTP 404 Not Found pero se obtuvo HTTP ' + res.status + '. Clínica B pudo asignar un tag a la mascota de Clínica A.',
+      );
+    });
+  });
+
+  describe('Fuga 16: Clínica B consulta trazas de auditoría de mascota ajena vía GET /audit/access-logs/pet/:petId (RF-62, RF-63)', () => {
+    it('debe denegar con HTTP 404 o 403 la consulta de auditoría de una mascota ajena sin grant activo', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/audit/access-logs/pet/' + PET_1_ID)
+        .set('Authorization', 'Bearer ' + vetBToken);
+      assert.ok(
+        res.status === 404 || res.status === 403,
+        'Brecha de privacidad: Se esperaba HTTP 404 o 403 pero se obtuvo HTTP ' + res.status + '. Clínica B pudo ver la auditoría de la mascota ajena.',
+      );
     });
   });
 });

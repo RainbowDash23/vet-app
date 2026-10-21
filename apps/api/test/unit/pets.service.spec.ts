@@ -596,7 +596,7 @@ describe('PetsService & PetsController (T13 / RF-17, RF-18, RF-19, RF-20)', () =
     });
 
     it('GET /pets debe delegar a petsService.findAll', async () => {
-      const res = await petsController.findAll({});
+      const res = await petsController.findAll(validClinicId, {});
       assert.ok(res.data);
       assert.ok(res.meta);
     });
