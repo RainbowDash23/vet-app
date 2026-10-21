@@ -5,6 +5,7 @@ export default defineConfig({
   plugins: [react()],
   test: {
     environment: 'jsdom',
+    pool: 'forks',
     globals: true,
     include: ['test/ui/**/*.{spec,test}.{ts,tsx}'],
     setupFiles: ['./test/ui/setup.ts'],
