@@ -116,6 +116,21 @@ export function registerIpcHandlers(
     return manager.getStatus();
   });
 
+  // Listado de puertos seriales disponibles (RF-67)
+  ipc.handle('serial:list-ports', async () => {
+    return await manager.listPorts();
+  });
+
+  // Conexión dinámica a puerto serial seleccionado (RF-67)
+  ipc.handle('serial:connect', async (_event: unknown, portPath: string) => {
+    const success = await manager.connect(portPath);
+    return {
+      success,
+      portName: manager.getCurrentPort(),
+      error: success ? undefined : manager.getLastError() ?? 'Error al conectar al puerto serial',
+    };
+  });
+
   // Simulación de lectura de tag NFC delegando a SerialManager (RF-27)
   ipc.handle('nfc:simulate-tag', (_event: unknown, uid: string) => {
     manager.processIncomingData(`UID:${uid}\r\n`);

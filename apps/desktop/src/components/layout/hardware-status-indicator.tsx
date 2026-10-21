@@ -53,7 +53,7 @@ export const HardwareStatusIndicator: React.FC<HardwareStatusIndicatorProps> = (
   const currentStatus = statusProp ?? internalStatus;
 
   const isConnected = currentStatus.connected;
-  const isReconnecting = !isConnected && (currentStatus.reconnecting === true || (currentStatus.attemptCount ?? 0) > 0);
+  const isReconnecting = !isConnected && currentStatus.reconnecting === true;
   const isDisconnected = !isConnected && !isReconnecting;
 
   // Límite normativo de 10 intentos según RF-34

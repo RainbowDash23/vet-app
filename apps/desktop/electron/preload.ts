@@ -1,6 +1,6 @@
 import electron from 'electron';
 import type { IpcRenderer, IpcRendererEvent } from 'electron';
-import type { ElectronAPI, HardwareStatus } from '@vet-app/shared-types';
+import type { ElectronAPI, HardwareStatus, SerialPortInfo, ConnectPortResult } from '@vet-app/shared-types';
 
 export interface AppInfo {
   version: string;
@@ -8,7 +8,7 @@ export interface AppInfo {
   arch: string;
 }
 
-export type { ElectronAPI, HardwareStatus };
+export type { ElectronAPI, HardwareStatus, SerialPortInfo, ConnectPortResult };
 
 const electronModule =
   (electron as unknown as { default?: typeof import('electron') })?.default ??
@@ -58,6 +58,14 @@ export function createElectronApi(ipc: IpcRenderer): ElectronAPI & {
 
     getAppInfo: (): Promise<AppInfo> => {
       return ipc.invoke('system:get-app-info');
+    },
+
+    listSerialPorts: (): Promise<SerialPortInfo[]> => {
+      return ipc.invoke('serial:list-ports');
+    },
+
+    connectSerialPort: (portPath: string): Promise<ConnectPortResult> => {
+      return ipc.invoke('serial:connect', portPath);
     },
   };
 }

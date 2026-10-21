@@ -178,3 +178,45 @@
   outline: 2px solid var(--color-border-focus);
   outline-offset: 2px;
 }
+
+.portSelectGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.portSelect {
+  width: 100%;
+  font-size: var(--font-size-xs);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background-color: var(--color-bg-app);
+  color: var(--color-text-primary);
+}
+
+.portConnectButton {
+  font-size: var(--font-size-xs);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-primary);
+  background-color: var(--color-primary-light);
+  color: var(--color-primary);
+  cursor: pointer;
+  font-weight: var(--font-weight-medium);
+}
+
+.portConnectButton:hover:not(:disabled) {
+  background-color: var(--color-primary);
+  color: #ffffff;
+}
+
+.portError {
+  font-size: 11px;
+  color: var(--color-error);
+  background: var(--color-error-light, #fee2e2);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-error, #ef4444);
+  word-break: break-word;
+}

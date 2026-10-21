@@ -1,6 +1,7 @@
 import { EventEmitter } from 'events';
-import type { HardwareStatus } from '@vet-app/shared-types';
+import type { HardwareStatus, SerialPortInfo } from '@vet-app/shared-types';
 import type { ITagReader } from '../src/readers/tag-reader.interface';
+import { SerialPortDriver } from './serialport.driver.ts';
 
 /**
  * Expresión regular obligatoria de sanitización de tramas seriales NFC (RF-27).
@@ -114,7 +115,11 @@ export class SerialManager extends EventEmitter implements ITagReader {
 
   constructor(options: SerialManagerOptions = {}) {
     super();
-    this.driver = options.driver ?? new InMemorySerialDriver();
+    this.driver =
+      options.driver ??
+      (process.env.SERIAL_DRIVER === 'memory'
+        ? new InMemorySerialDriver()
+        : new SerialPortDriver({ baudRate: options.baudRate }));
     this.reconnectIntervalMs = options.reconnectIntervalMs ?? RECONNECT_INTERVAL_MS;
     this.maxReconnectAttempts = options.maxReconnectAttempts ?? MAX_RECONNECT_ATTEMPTS;
     this.baudRate = options.baudRate ?? DEFAULT_BAUD_RATE;
@@ -141,13 +146,40 @@ export class SerialManager extends EventEmitter implements ITagReader {
   }
 
   /**
+   * Retorna el último mensaje de error registrado por el driver.
+   */
+  public getLastError(): string | null {
+    if ('getLastError' in this.driver && typeof (this.driver as unknown as { getLastError: () => string | null }).getLastError === 'function') {
+      return (this.driver as unknown as { getLastError: () => string | null }).getLastError();
+    }
+    return null;
+  }
+
+  /**
+   * Retorna el puerto serial actualmente configurado.
+   */
+  public getCurrentPort(): string | null {
+    return this.currentPort;
+  }
+
+  /**
+   * Enumera los puertos seriales detectados en el sistema (RF-67).
+   */
+  public async listPorts(): Promise<SerialPortInfo[]> {
+    return SerialPortDriver.listAvailablePorts();
+  }
+
+  /**
    * Conecta al puerto serial especificado o al puerto predeterminado.
    */
   public async connect(portName?: string): Promise<boolean> {
     this.clearReconnectTimer();
     this.isManualDisconnect = false;
 
-    const targetPort = portName || this.currentPort || 'COM3';
+    let targetPort = portName || this.currentPort;
+    if (!targetPort) {
+      targetPort = (await SerialPortDriver.detectEsp32Port()) || 'COM3';
+    }
     this.currentPort = targetPort;
 
     try {

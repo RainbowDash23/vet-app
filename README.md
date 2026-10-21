@@ -101,7 +101,7 @@ cp .env.example .env
 | `JWT_REFRESH_SECRET` | Clave secreta para Refresh Tokens (mín. 32 chars) | `change_me_super_secret_refresh_jwt_key_32_chars_long` |
 | `JWT_REFRESH_EXPIRES_IN` | Tiempo de vida del Refresh Token | `7d` |
 | `TRUST_PROXY` | Configuración de proxy inverso (`true`, `false`, o número de saltos) | `false` |
-| `CORS_ORIGIN` | Orígenes permitidos (separados por coma o `*`) | `http://localhost:5173,http://127.0.0.1:5173` |
+| `CORS_ORIGIN` | Orígenes permitidos (separados por coma; en Electron dev usa `http://localhost:5173` y en build/prod usa `file://,null`) | `http://localhost:5173,http://127.0.0.1:5173,file://,null` |
 | `NOTIFICATIONS_CRON_ENABLED` | Activa la ejecución horaria del cron de recordatorios/alertas | `false` |
 | `MAIL_DRIVER` | Controlador de transporte de correo (`log` o `smtp`) | `log` |
 | `SMTP_HOST` | Servidor SMTP (requerido si `MAIL_DRIVER=smtp`) | `smtp.example.com` |
@@ -144,6 +144,13 @@ pnpm --filter @vet-app/api start:prod
 ```
 
 ---
+
+### 5.4 Orígenes de CORS del Cliente Electron
+- **Modo Desarrollo (pnpm dev:desktop):** El proceso de renderizado carga la interfaz desde el servidor Vite local en http://localhost:5173.
+- **Modo Producción / Empaquetado (pnpm build:desktop && pnpm start):** El proceso principal de Electron carga el bundle compilado mediante loadFile('dist/index.html'), emitiendo peticiones HTTP hacia la API con encabezado de origen ile:// o 
+ull.
+- **Configuración estricta de CORS_ORIGIN:** http://localhost:5173,http://127.0.0.1:5173,file://,null. Se prohíbe explícitamente abrir CORS a comodín (*) para salvaguardar el aislamiento de las credenciales clínicas y prevenir ataques cross-origin.
+
 
 ## 6. Ejecución de Pruebas
 

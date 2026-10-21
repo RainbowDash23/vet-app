@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import type { Role } from '@vet-app/shared-types';
+import type { Role, SerialPortInfo } from '@vet-app/shared-types';
 import { fakeTagReader } from '../../readers/fake-tag-reader';
 import styles from './sidebar.module.css';
 
@@ -65,6 +65,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
   className,
 }) => {
   const [lastScannedUid, setLastScannedUid] = useState<string | null>(null);
+  const [ports, setPorts] = useState<SerialPortInfo[]>([]);
+  const [selectedPort, setSelectedPort] = useState<string>('');
+  const [portError, setPortError] = useState<string | null>(null);
+  const [isConnecting, setIsConnecting] = useState(false);
+  const isDev = Boolean(import.meta.env?.DEV);
 
   // Suscripción al lector de tags (tanto la implementación simulada como eventos nativos)
   useEffect(() => {
@@ -79,11 +84,39 @@ export const Sidebar: React.FC<SidebarProps> = ({
       });
     }
 
+    if (typeof window !== 'undefined' && window.electronAPI?.listSerialPorts) {
+      window.electronAPI.listSerialPorts().then((list) => {
+        if (list && list.length > 0) {
+          setPorts(list);
+          const esp = list.find((p) => p.isEsp32);
+          setSelectedPort(esp ? esp.path : list[0].path);
+        }
+      }).catch(() => {});
+    }
+
     return () => {
       unsubscribe();
       electronUnsub?.();
     };
   }, []);
+
+  const handleConnectPort = async () => {
+    if (!selectedPort || !window.electronAPI?.connectSerialPort) {
+      return;
+    }
+    setIsConnecting(true);
+    setPortError(null);
+    try {
+      const res = await window.electronAPI.connectSerialPort(selectedPort);
+      if (!res.success) {
+        setPortError(res.error || 'Error al conectar al puerto serial');
+      }
+    } catch (err: unknown) {
+      setPortError((err as Error)?.message || 'Error al conectar al puerto serial');
+    } finally {
+      setIsConnecting(false);
+    }
+  };
 
   const handleSimulateTag = () => {
     const randomHex = Math.floor(Math.random() * 0xffffffffffff)
@@ -155,7 +188,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div className={styles.nfcWidget}>
           <div className={styles.nfcHeader}>
             <span>Lector NFC</span>
-            <span className={styles.nfcBadge}>Simulador</span>
+            <span className={styles.nfcBadge}>{isDev ? 'Dev / Serial' : 'Serial USB'}</span>
           </div>
 
           <div className={styles.nfcUid}>
@@ -166,13 +199,49 @@ export const Sidebar: React.FC<SidebarProps> = ({
             )}
           </div>
 
-          <button
-            type="button"
-            className={styles.simulateButton}
-            onClick={handleSimulateTag}
-          >
-            📡 Simular lectura NFC
-          </button>
+          {ports.length > 0 && (
+            <div className={styles.portSelectGroup}>
+              <select
+                className={styles.portSelect}
+                value={selectedPort}
+                onChange={(e) => {
+                  setSelectedPort(e.target.value);
+                  setPortError(null);
+                }}
+                aria-label="Seleccionar puerto serial"
+              >
+                {ports.map((p) => (
+                  <option key={p.path} value={p.path}>
+                    {p.displayName}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                className={styles.portConnectButton}
+                onClick={handleConnectPort}
+                disabled={isConnecting || !selectedPort}
+              >
+                {isConnecting ? 'Conectando...' : 'Conectar puerto'}
+              </button>
+            </div>
+          )}
+
+          {portError && (
+            <div role="alert" className={styles.portError}>
+              ⚠️ {portError}
+            </div>
+          )}
+
+          {isDev && (
+            <button
+              type="button"
+              className={styles.simulateButton}
+              onClick={handleSimulateTag}
+            >
+              📡 Simular lectura NFC
+            </button>
+          )}
         </div>
       </div>
     </aside>
