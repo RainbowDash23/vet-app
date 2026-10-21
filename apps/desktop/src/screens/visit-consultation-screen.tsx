@@ -18,6 +18,7 @@ import {
 import { AddNoteModal } from '../components/screens/add-note-modal';
 import { visitsService as defaultVisitsService, VisitsService } from '../services/visits.service';
 import { ApiError } from '../services/api.client';
+import { useSafeDirtyGuard } from '../hooks/use-form-dirty-guard';
 import styles from './visit-consultation-screen.module.css';
 
 export interface VitalsInput {
@@ -162,6 +163,29 @@ export const VisitConsultationScreen: React.FC<VisitConsultationScreenProps> = (
 
   // Determina si la consulta se encuentra cerrada e inmutable (RF-45)
   const isClosed = Boolean(visit?.closedAt);
+
+  // Detección de cambios no guardados en el formulario de consulta (RF-33)
+  const isDirty = useMemo(() => {
+    if (isClosed) return false;
+    return (
+      weight !== (initialVisit?.weight !== undefined && initialVisit?.weight !== null ? String(initialVisit.weight) : '') ||
+      temperature !== (initialVisit?.temperature !== undefined && initialVisit?.temperature !== null ? String(initialVisit.temperature) : '') ||
+      heartRate !== (initialVisit?.heartRate !== undefined && initialVisit?.heartRate !== null ? String(initialVisit.heartRate) : '') ||
+      respiratoryRate !== (initialVisit?.respiratoryRate !== undefined && initialVisit?.respiratoryRate !== null ? String(initialVisit.respiratoryRate) : '') ||
+      capillaryRefillTime !== (initialVisit?.capillaryRefillTime !== undefined && initialVisit?.capillaryRefillTime !== null ? String(initialVisit.capillaryRefillTime) : '') ||
+      notes !== (initialVisit?.notes ?? '') ||
+      diagnosis !== (initialVisit?.diagnosis ?? '') ||
+      treatment !== (initialVisit?.treatment ?? '')
+    );
+  }, [isClosed, weight, temperature, heartRate, respiratoryRate, capillaryRefillTime, notes, diagnosis, treatment, initialVisit]);
+
+  const safeDirtyGuard = useSafeDirtyGuard();
+  useEffect(() => {
+    safeDirtyGuard?.setIsDirty(isDirty);
+    return () => {
+      safeDirtyGuard?.setIsDirty(false);
+    };
+  }, [safeDirtyGuard, isDirty]);
 
   // Carga inicial si solo se pasó visitId
   useEffect(() => {

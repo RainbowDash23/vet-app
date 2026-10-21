@@ -6,6 +6,7 @@ import type { OwnerResponseDto } from '@vet-app/shared-types';
 import { FormField } from '../components/forms/FormField';
 import { ownersService } from '../services/owners.service';
 import { ApiError } from '../services/api.client';
+import { useSafeDirtyGuard } from '../hooks/use-form-dirty-guard';
 import styles from './OwnerRegisterScreen.module.css';
 
 const ownerSchema = z.object({
@@ -43,6 +44,7 @@ export const OwnerRegisterScreen: React.FC<OwnerRegisterScreenProps> = ({
     handleSubmit,
     watch,
     reset,
+    formState: { isDirty },
   } = useForm<OwnerFormValues>({
     resolver: zodResolver(ownerSchema),
     defaultValues: {
@@ -54,6 +56,14 @@ export const OwnerRegisterScreen: React.FC<OwnerRegisterScreenProps> = ({
       address: '',
     },
   });
+
+  const safeDirtyGuard = useSafeDirtyGuard();
+  React.useEffect(() => {
+    safeDirtyGuard?.setIsDirty(isDirty);
+    return () => {
+      safeDirtyGuard?.setIsDirty(false);
+    };
+  }, [safeDirtyGuard, isDirty]);
 
   const documentIdValue = watch('documentId');
 

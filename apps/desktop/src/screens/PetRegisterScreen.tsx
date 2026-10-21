@@ -9,6 +9,7 @@ import { petsService } from '../services/pets.service';
 import { ownersService } from '../services/owners.service';
 import { ApiError } from '../services/api.client';
 import { fakeTagReader } from '../readers/fake-tag-reader';
+import { useSafeDirtyGuard } from '../hooks/use-form-dirty-guard';
 import styles from './PetRegisterScreen.module.css';
 
 const petSchema = z.object({
@@ -52,6 +53,7 @@ export const PetRegisterScreen: React.FC<PetRegisterScreenProps> = ({
     handleSubmit,
     setValue,
     reset,
+    formState: { isDirty },
   } = useForm<PetFormValues>({
     resolver: zodResolver(petSchema),
     defaultValues: {
@@ -64,6 +66,14 @@ export const PetRegisterScreen: React.FC<PetRegisterScreenProps> = ({
       nfcUid: initialNfcUid ?? '',
     },
   });
+
+  const safeDirtyGuard = useSafeDirtyGuard();
+  useEffect(() => {
+    safeDirtyGuard?.setIsDirty(isDirty);
+    return () => {
+      safeDirtyGuard?.setIsDirty(false);
+    };
+  }, [safeDirtyGuard, isDirty]);
 
   // Cargar propietarios vinculados a la clínica activa
   useEffect(() => {
