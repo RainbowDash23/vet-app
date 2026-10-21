@@ -1,4 +1,4 @@
-import { describe, it, beforeEach } from 'node:test';
+import { describe, it, beforeEach, afterEach } from 'node:test';
 import * as assert from 'node:assert';
 import * as crypto from 'crypto';
 import { NotificationStatus, NotificationType, VisitStatus } from '@prisma/client';
@@ -567,6 +567,37 @@ describe('NotificationSchedulerService & NotificationsService - T24 (RF-51, RF-5
       assert.strictEqual(secondSummary.vaccineAlerts, 0);
       assert.strictEqual(secondSummary.total, 0);
       assert.strictEqual(notificationsDb.length, 2, 'La base de datos conserva exactamente 2 notificaciones');
+    });
+  });
+describe('Ejecución programada cada hora (@Cron)', () => {
+    const originalEnv = { ...process.env };
+
+    afterEach(() => {
+      process.env = { ...originalEnv };
+    });
+
+    it('no debe ejecutar runScheduler si NOTIFICATIONS_CRON_ENABLED no es true', async () => {
+      delete process.env.NOTIFICATIONS_CRON_ENABLED;
+      let runSchedulerCalled = false;
+      schedulerService.runScheduler = async () => {
+        runSchedulerCalled = true;
+        return { visitReminders: 0, vaccineAlerts: 0, total: 0 };
+      };
+
+      await (schedulerService as any).handleHourlyCron();
+      assert.strictEqual(runSchedulerCalled, false, 'No debe ejecutarse si la bandera está desactivada');
+    });
+
+    it('debe ejecutar runScheduler si NOTIFICATIONS_CRON_ENABLED es true', async () => {
+      process.env.NOTIFICATIONS_CRON_ENABLED = 'true';
+      let runSchedulerCalled = false;
+      schedulerService.runScheduler = async () => {
+        runSchedulerCalled = true;
+        return { visitReminders: 1, vaccineAlerts: 1, total: 2 };
+      };
+
+      await (schedulerService as any).handleHourlyCron();
+      assert.strictEqual(runSchedulerCalled, true, 'Debe ejecutarse cuando la bandera es true');
     });
   });
 });

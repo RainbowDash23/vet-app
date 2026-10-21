@@ -102,6 +102,14 @@ cp .env.example .env
 | `JWT_REFRESH_EXPIRES_IN` | Tiempo de vida del Refresh Token | `7d` |
 | `TRUST_PROXY` | Configuración de proxy inverso (`true`, `false`, o número de saltos) | `false` |
 | `CORS_ORIGIN` | Orígenes permitidos (separados por coma o `*`) | `http://localhost:5173,http://127.0.0.1:5173` |
+| `NOTIFICATIONS_CRON_ENABLED` | Activa la ejecución horaria del cron de recordatorios/alertas | `false` |
+| `MAIL_DRIVER` | Controlador de transporte de correo (`log` o `smtp`) | `log` |
+| `SMTP_HOST` | Servidor SMTP (requerido si `MAIL_DRIVER=smtp`) | `smtp.example.com` |
+| `SMTP_PORT` | Puerto del servidor SMTP | `587` |
+| `SMTP_USER` | Usuario de autenticación SMTP | `usuario@example.com` |
+| `SMTP_PASS` | Contraseña SMTP | `change_me` |
+| `SMTP_FROM` | Remitente de los correos salientes | `"Vet App <notificaciones@example.com>"` |
+| `SMTP_SECURE` | Conexión TLS directa (`true` para puerto 465, `false` para STARTTLS) | `false` |
 
 ---
 

@@ -1,4 +1,4 @@
-import { describe, it, beforeEach } from 'node:test';
+import { describe, it, beforeEach, afterEach } from 'node:test';
 import * as assert from 'node:assert';
 import { NotificationStatus, NotificationType } from '@prisma/client';
 import {
@@ -483,6 +483,83 @@ describe('NotificationDispatcherService & MailTransportService - T25 (RF-54)', (
       const summary = await dispatcherService.dispatchPendingNotifications(5);
       assert.strictEqual(summary.processed, 5);
       assert.strictEqual(summary.sent, 5);
+    });
+  });
+describe('Configuración de transporte de correo (MAIL_DRIVER: log vs smtp)', () => {
+    const originalEnv = { ...process.env };
+
+    afterEach(() => {
+      process.env = { ...originalEnv };
+    });
+
+    it('con MAIL_DRIVER=log debe registrar en logger y marcar como SENT sin conectar a red', async () => {
+      process.env.MAIL_DRIVER = 'log';
+      const notification: MockNotification = {
+        id: 'notif-log-1',
+        idempotencyKey: 'key-log-1',
+        type: NotificationType.VISIT_REMINDER,
+        entityId: 'visit-1',
+        recipient: 'test@example.com',
+        targetDate: new Date(),
+        status: NotificationStatus.PENDING,
+        retryCount: 0,
+        errorMessage: null,
+        sentAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      notificationsDb.push(notification);
+
+      const result = await dispatcherService.dispatchNotification(notification);
+
+      assert.strictEqual(result.success, true);
+      assert.strictEqual(result.status, NotificationStatus.SENT);
+      assert.strictEqual(notificationsDb[0].status, NotificationStatus.SENT);
+      assert.ok(notificationsDb[0].sentAt instanceof Date);
+    });
+
+    it('con MAIL_DRIVER=smtp debe invocar sendMail del transporter con destinatario, asunto y cuerpo', async () => {
+      process.env.MAIL_DRIVER = 'smtp';
+      process.env.SMTP_FROM = 'Vet Clinica <noreply@vet.local>';
+
+      let sendMailCalled = false;
+      let sendMailArgs: any = null;
+
+      const mockTransporter: any = {
+        sendMail: async (mailOptions: any) => {
+          sendMailCalled = true;
+          sendMailArgs = mailOptions;
+          return { messageId: 'mock-msg-123' };
+        },
+      };
+
+      (mailTransportService as any).setTransporter(mockTransporter);
+
+      const notification: MockNotification = {
+        id: 'notif-smtp-1',
+        idempotencyKey: 'key-smtp-1',
+        type: NotificationType.VACCINE_ALERT,
+        entityId: 'vac-1',
+        recipient: 'owner@example.com',
+        targetDate: new Date('2026-11-01T10:00:00Z'),
+        status: NotificationStatus.PENDING,
+        retryCount: 0,
+        errorMessage: null,
+        sentAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+      notificationsDb.push(notification);
+
+      const result = await dispatcherService.dispatchNotification(notification);
+
+      assert.strictEqual(result.success, true);
+      assert.strictEqual(result.status, NotificationStatus.SENT);
+      assert.strictEqual(sendMailCalled, true, 'sendMail debe haber sido invocado');
+      assert.strictEqual(sendMailArgs.to, 'owner@example.com');
+      assert.strictEqual(sendMailArgs.from, 'Vet Clinica <noreply@vet.local>');
+      assert.ok(sendMailArgs.subject.includes('Vacunación') || sendMailArgs.subject.includes('Alerta'));
+      assert.ok(sendMailArgs.text.includes('vac-1'));
     });
   });
 });

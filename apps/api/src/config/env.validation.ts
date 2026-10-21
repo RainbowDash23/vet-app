@@ -30,6 +30,38 @@ export class EnvironmentVariables {
   @IsOptional()
   @IsString()
   CORS_ORIGIN?: string;
+
+  @IsOptional()
+  @IsString()
+  MAIL_DRIVER?: string;
+
+  @IsOptional()
+  @IsString()
+  NOTIFICATIONS_CRON_ENABLED?: string;
+
+  @IsOptional()
+  @IsString()
+  SMTP_HOST?: string;
+
+  @IsOptional()
+  @IsNumber()
+  SMTP_PORT?: number;
+
+  @IsOptional()
+  @IsString()
+  SMTP_USER?: string;
+
+  @IsOptional()
+  @IsString()
+  SMTP_PASS?: string;
+
+  @IsOptional()
+  @IsString()
+  SMTP_FROM?: string;
+
+  @IsOptional()
+  @IsString()
+  SMTP_SECURE?: string;
 }
 
 export function validateEnv(config: Record<string, unknown>): EnvironmentVariables {
@@ -53,6 +85,21 @@ export function validateEnv(config: Record<string, unknown>): EnvironmentVariabl
     throw new Error(
       '[Config Error] JWT_SECRET no puede contener "change_me" en entorno de producción',
     );
+  }
+
+  if (validatedConfig.MAIL_DRIVER === 'smtp') {
+    const missing: string[] = [];
+    if (!validatedConfig.SMTP_HOST) missing.push('SMTP_HOST');
+    if (!validatedConfig.SMTP_PORT) missing.push('SMTP_PORT');
+    if (!validatedConfig.SMTP_USER) missing.push('SMTP_USER');
+    if (!validatedConfig.SMTP_PASS) missing.push('SMTP_PASS');
+    if (!validatedConfig.SMTP_FROM) missing.push('SMTP_FROM');
+
+    if (missing.length > 0) {
+      throw new Error(
+        `[Config Error] Variables de configuración SMTP requeridas cuando MAIL_DRIVER=smtp faltantes: ${missing.join(', ')}`,
+      );
+    }
   }
 
   return validatedConfig;

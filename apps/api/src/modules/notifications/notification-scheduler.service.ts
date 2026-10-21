@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import {
   Notification,
   NotificationType,
@@ -203,6 +204,33 @@ export class NotificationSchedulerService {
    * @param referenceDate Fecha base de evaluación.
    * @returns Resumen con las cantidades encoladas por tipo y total general.
    */
+/**
+   * Tarea programada cada hora (@Cron(CronExpression.EVERY_HOUR)) (RF-51, RF-52).
+   * Controlada por NOTIFICATIONS_CRON_ENABLED (desactivada por defecto para no interferir en tests).
+   */
+  @Cron(CronExpression.EVERY_HOUR)
+  async handleHourlyCron(): Promise<void> {
+    if (process.env.NOTIFICATIONS_CRON_ENABLED !== 'true') {
+      return;
+    }
+
+    this.logger.log(
+      '[NotificationScheduler] Iniciando escaneo programado de visitas y vacunas próximas a 72h...',
+    );
+
+    try {
+      const summary = await this.runScheduler();
+      this.logger.log(
+        `[NotificationScheduler] Escaneo programado finalizado: ${summary.visitReminders} recordatorios y ${summary.vaccineAlerts} alertas encoladas (Total: ${summary.total})`,
+      );
+    } catch (error: any) {
+      this.logger.error(
+        `[NotificationScheduler] Error durante el escaneo programado: ${error?.message}`,
+        error?.stack,
+      );
+    }
+  }
+
   async runScheduler(
     referenceDate = new Date(),
   ): Promise<SchedulerExecutionSummary> {

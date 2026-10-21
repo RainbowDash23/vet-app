@@ -44,4 +44,42 @@ describe('EnvValidation (RNF-2, RF-10 / Security Hardening)', () => {
     });
     assert.strictEqual(config.NODE_ENV, Environment.Production);
   });
+it('debe aceptar MAIL_DRIVER=log sin requerir variables SMTP', () => {
+    const config = validateEnv({
+      ...baseValidConfig,
+      MAIL_DRIVER: 'log',
+    });
+    assert.strictEqual(config.MAIL_DRIVER, 'log');
+  });
+
+  it('debe rechazar MAIL_DRIVER=smtp si faltan variables SMTP requeridas', () => {
+    assert.throws(
+      () => {
+        validateEnv({
+          ...baseValidConfig,
+          MAIL_DRIVER: 'smtp',
+        });
+      },
+      (err: any) => {
+        assert.ok(err instanceof Error);
+        assert.ok(err.message.includes('SMTP'));
+        return true;
+      },
+    );
+  });
+
+  it('debe aceptar MAIL_DRIVER=smtp con todas las variables SMTP suministradas', () => {
+    const config = validateEnv({
+      ...baseValidConfig,
+      MAIL_DRIVER: 'smtp',
+      SMTP_HOST: 'smtp.mailtrap.io',
+      SMTP_PORT: 2525,
+      SMTP_USER: 'test_user',
+      SMTP_PASS: 'test_pass',
+      SMTP_FROM: 'Vet <no-reply@vet.local>',
+    });
+    assert.strictEqual(config.MAIL_DRIVER, 'smtp');
+    assert.strictEqual(config.SMTP_HOST, 'smtp.mailtrap.io');
+    assert.strictEqual(config.SMTP_PORT, 2525);
+  });
 });
