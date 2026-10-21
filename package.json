@@ -10,6 +10,7 @@
     "db:down": "docker compose down",
     "prisma:generate": "pnpm --filter @vet-app/api prisma:generate",
     "dev:desktop": "pnpm --filter @vet-app/desktop dev",
+    "dev:electron": "pnpm --filter @vet-app/desktop dev:electron",
     "build:desktop": "pnpm --filter @vet-app/desktop build",
     "build": "pnpm -r build",
     "typecheck": "pnpm --filter @vet-app/shared-types build && pnpm --filter @vet-app/api exec tsc --noEmit && pnpm --filter @vet-app/desktop exec tsc --noEmit",

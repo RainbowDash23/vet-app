@@ -60,44 +60,39 @@ Para ejecutar la plataforma en entorno local o de desarrollo se requiere:
 
 ## 3. Puesta en Marcha
 
-### 3.1 Base de Datos (PostgreSQL 16)
+Para iniciar el sistema de manera íntegra, ejecute los siguientes pasos en este **orden exacto**:
+
 ```bash
-# Iniciar contenedor Docker de PostgreSQL
+# PASO 1: Levantar el contenedor PostgreSQL en Docker
 pnpm db:up
 # o directamente: docker compose up -d
 
-# Aplicar las migraciones aditivas de Prisma
-pnpm --filter @vet-app/api prisma migrate deploy
+# PASO 2: Desplegar las migraciones de base de datos en PostgreSQL
+pnpm --filter @vet-app/api exec prisma migrate deploy
 
-# Ejecutar la siembra inicial (clínicas y usuarios RBAC)
+# PASO 3: Ejecutar la siembra inicial (Seed) de clínicas y usuarios RBAC
 pnpm --filter @vet-app/api prisma db seed
 
-# Para detener el contenedor cuando no se use:
-# pnpm db:down
-```
-
-### 3.2 Backend API (NestJS)
-```bash
-# Modo desarrollo con recarga en caliente:
+# PASO 4: Iniciar el servidor Backend API (NestJS en http://localhost:3000)
 pnpm dev:api
 
-# Compilación y arranque en producción:
-pnpm build:api
-pnpm --filter @vet-app/api start:prod
+# PASO 5: Iniciar la aplicación de escritorio Electron (con Vite dev server)
+pnpm dev:electron
 ```
-La API estará disponible en `http://localhost:3000`.
 
-### 3.3 Aplicación de Escritorio (Electron + React)
-```bash
-# Modo desarrollo (abre Vite dev server en localhost:5173 y Electron):
-pnpm dev:desktop
+> [!IMPORTANT]
+> **Credenciales Iniciales de Acceso (Semilla)**
+> La siembra genera automáticamente los usuarios RBAC iniciales. El usuario administrador principal para pruebas es:
+> - **Correo:** `admin@vet.local`
+> - **Contraseña:** `VetApp2026!` (configurable mediante la variable `SEED_DEFAULT_PASSWORD` en el archivo `.env`)
+> - **Rol:** `ADMIN`
+> - **Clínica:** Clínica Veterinaria Central
+> 
+> Otros usuarios de prueba creados por el seed:
+> - Veterinario: `vet@vet.local` / `VetApp2026!` (Rol `VET`)
+> - Recepcionista: `reception@vet.local` / `VetApp2026!` (Rol `RECEPTION`)
 
-# Compilación de producción del cliente de escritorio:
-pnpm build:desktop
-
-# Ejecutar el empaquetado de producción:
-pnpm --filter @vet-app/desktop start
-```
+---
 
 ---
 
@@ -135,14 +130,36 @@ cp .env.example .env
 | `SMTP_PASS` | String | Contraseña de autenticación SMTP | `change_me` |
 | `SMTP_FROM` | String | Remitente de las notificaciones | `"Vet App <notificaciones@example.com>"` |
 | `SMTP_SECURE` | Booleano | TLS directo para puerto 465 (`false` para STARTTLS) | `false` |
+| `SEED_DEFAULT_PASSWORD` | String | Contraseña asignada a usuarios de prueba en la siembra | `VetApp2026!` |
 | `SERIAL_PORT` | String | Puerto COM a conectar (ej: `COM3`, `/dev/ttyUSB0`) | Autodetección por VID/PID |
 | `SERIAL_DRIVER` | `serialport` \| `memory` | Controlador serie del lector (`memory` para desarrollo/simulación) | `serialport` |
+| `VITE_DEV_TOOLS` | Booleano | Muestra botón de simulación de llavero NFC en barra lateral | `false` (desactivado por defecto) |
 
 ---
 
 ## 5. Conexión y Operación del Lector NFC (ESP32-WROOM + RC522)
 
-### 5.1 Comunicación Serial USB
+### 5.1 Guía Rápida para Probar el ESP32 con la Aplicación
+1. **Identificar el puerto COM asignado:**
+   - En Windows, presiona `Win + X` y abre el **Administrador de Dispositivos**.
+   - Despliega la categoría **Puertos (COM y LPT)** y conecta la placa ESP32 por USB. Observa qué puerto aparece (por ejemplo, `COM3`, `COM4`, o `Silicon Labs CP210x USB to UART Bridge (COM5)`).
+2. **Cerrar monitores serie en segundo plano:**
+   - Si tienes abierto **Thonny IDE**, el monitor serie de Arduino IDE o PuTTY, **ciérralo por completo** o desconecta el puerto. En Windows un puerto COM solo puede ser abierto por un proceso a la vez.
+3. **Configurar el puerto (Opcional):**
+   - El sistema autodetecta automáticamente los chips USB-Serial CP210x (`10C4:EA60`) y CH340 (`1A86:7523`).
+   - Si deseas forzar un puerto específico, agrega `SERIAL_PORT=COM3` (reemplazando por tu puerto) en el archivo `.env`.
+4. **Iniciar la aplicación:**
+   ```bash
+   pnpm dev:electron
+   ```
+5. **Verificar el indicador en la barra superior:**
+   - El indicador de hardware en la cabecera mostrará un punto verde y el texto **Conectado (COMX)**.
+   - También puedes seleccionar manualmente el puerto detectado en el desplegable de la barra lateral y pulsar **Conectar puerto**.
+6. **Probar el escaneo físico:**
+   - Acerca una tarjeta o llavero NFC al transceptor RC522.
+   - La pantalla reaccionará inmediatamente resolviendo el paciente o abriendo el modal de asignación si el llavero aún no ha sido vinculado a una mascota.
+
+### 5.2 Comunicación Serial USB
 El lector de mostrador utiliza una placa **ESP32-WROOM** conectada por cable USB a la computadora de la clínica:
 - **Velocidad y Formato:** 115200 baudios, 8 bits de datos, sin paridad, 1 bit de parada (8N1).
 - **Protocolo de Trama:** El firmware emite exclusivamente tramas en formato `UID:XXXXXXXX\r\n` (o 14 caracteres hexadecimales para tags de 7 bytes).
@@ -150,16 +167,16 @@ El lector de mostrador utiliza una placa **ESP32-WROOM** conectada por cable USB
 - **Selección Manual:** Si existen múltiples puertos, la barra lateral permite seleccionarlo mediante los canales IPC `serial:list-ports` y `serial:connect`.
 - **Resiliencia:** Reintenta la conexión automáticamente cada 3000 ms hasta 10 intentos consecutivos; si el enlace no responde o el puerto está ocupado, el indicador de hardware en la cabecera muestra el estado `DESCONECTADO` con alerta visual accesible.
 
-### 5.2 ⚠️ Advertencia Crítica: Bloqueo Exclusivo de Puerto COM en Windows
+### 5.3 Advertencia: Bloqueo Exclusivo de Puerto COM en Windows
 En Windows, los puertos serie (`COM3`, `COM4`, etc.) operan bajo **acceso exclusivo a nivel de sistema operativo**:
 - **Conflicto con Thonny IDE:** Si el IDE Thonny está abierto o conectado al microcontrolador para programar o depurar MicroPython, la app Electron **no podrá abrir el puerto** y reportará colisión (`EBUSY` o `Access Denied`).
 - **Instrucción obligatoria:** Cierra completamente Thonny IDE o haz clic en su botón de desconexión antes de iniciar la aplicación de escritorio.
 
-### 5.3 Simulación de Llaveros en Desarrollo
+### 5.4 Simulación de Llaveros en Desarrollo
 Para realizar pruebas sin hardware físico conectado:
-1. Inicia la aplicación en modo desarrollo (`pnpm dev:desktop`) o define la variable de entorno `SERIAL_DRIVER=memory`.
-2. En la barra lateral aparecerá el botón **"🏷️ Simular Lectura NFC"**.
-3. Al pulsarlo o acercar un transpondedor, la aplicación procesará el flujo completo de resolución y navegación reactiva.
+1. Activa la variable `VITE_DEV_TOOLS=true` en `.env.local` o define `SERIAL_DRIVER=memory` en `.env`.
+2. En la barra lateral aparecerá el botón **"Simular lectura NFC"**.
+3. Al pulsarlo, el sistema emitirá un UID de prueba para verificar los flujos de interfaz de usuario.
 
 ---
 

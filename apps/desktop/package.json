@@ -6,6 +6,7 @@
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite",
+    "dev:electron": "node scripts/dev-electron.mjs",
     "build:electron": "tsc -p tsconfig.electron.json && node -e \"const fs=require('fs'),path=require('path');const src=path.join('dist-electron','electron');if(fs.existsSync(src)){fs.readdirSync(src).forEach(f=>fs.copyFileSync(path.join(src,f),path.join('dist-electron',f)))}\"",
     "build:renderer": "vite build",
     "build": "pnpm build:electron && pnpm build:renderer",
