@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 
 /**
@@ -16,7 +16,7 @@ export class TokenRevocationService {
    */
   private readonly revokedJtis = new Map<string, Date>();
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(@Optional() private readonly prisma?: PrismaService) {}
 
   /**
    * Registra un JTI revocado con su marca temporal de expiración (TTL) (RF-4).

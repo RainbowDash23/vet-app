@@ -40,12 +40,14 @@ export class ApiClient {
 
   constructor(options?: ApiClientOptions) {
     const nodeProcess = (globalThis as unknown as { process?: { env?: Record<string, string | undefined> } }).process;
+    const metaEnv =
+      typeof import.meta !== 'undefined'
+        ? (import.meta as unknown as { env?: Record<string, string | undefined> }).env?.VITE_API_URL
+        : undefined;
     const defaultUrl =
-      typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_API_URL
-        ? (import.meta as any).env.VITE_API_URL
-        : typeof nodeProcess !== 'undefined' && nodeProcess.env?.VITE_API_URL
-          ? nodeProcess.env.VITE_API_URL
-          : 'http://localhost:3000';
+      metaEnv ||
+      (typeof nodeProcess !== 'undefined' && nodeProcess.env?.VITE_API_URL) ||
+      'http://localhost:3000';
 
     this.baseUrl = (options?.baseUrl || defaultUrl).replace(/\/$/, '');
     this.fetchFn = options?.fetchFn || globalThis.fetch.bind(globalThis);

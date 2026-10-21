@@ -19,7 +19,7 @@ export class JwtAuthGuard implements CanActivate {
     private readonly configService: ConfigService,
     tokenRevocationService?: TokenRevocationService,
   ) {
-    this.tokenRevocation = tokenRevocationService ?? new TokenRevocationService(null as any);
+    this.tokenRevocation = tokenRevocationService ?? new TokenRevocationService();
   }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {

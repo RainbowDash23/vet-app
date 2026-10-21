@@ -160,7 +160,7 @@ export const TagAssignmentModal: React.FC<TagAssignmentModalProps> = ({
       if (err instanceof ApiError && err.status === 409) {
         const conflictMsg =
           typeof err.data === 'object' && err.data !== null && 'message' in err.data
-            ? String((err.data as any).message)
+            ? String((err.data as Record<string, unknown>).message)
             : err.message;
         setErrorMessage(
           conflictMsg ||

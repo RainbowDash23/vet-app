@@ -115,10 +115,10 @@ export class VisitsController {
   async attend(
     @CurrentClinicId() clinicId: string,
     @Param('id') visitId: string,
-    @Req() req: Request & { user?: AuthenticatedUser },
+    @Req() req: Request & { user?: AuthenticatedUser & { id?: string } },
     @Body() attendDto: AttendVisitDto,
   ): Promise<Visit> {
-    const userId = req.user?.userId || (req.user as any)?.id;
+    const userId = req.user?.userId || req.user?.id;
     if (!userId) {
       throw new UnauthorizedException('Identificador de usuario no disponible en la sesión');
     }
@@ -134,9 +134,9 @@ export class VisitsController {
   async close(
     @CurrentClinicId() clinicId: string,
     @Param('id') visitId: string,
-    @Req() req: Request & { user?: AuthenticatedUser },
+    @Req() req: Request & { user?: AuthenticatedUser & { id?: string } },
   ): Promise<Visit> {
-    const userId = req.user?.userId || (req.user as any)?.id;
+    const userId = req.user?.userId || req.user?.id;
     if (!userId) {
       throw new UnauthorizedException('Identificador de usuario no disponible en la sesión');
     }
@@ -152,13 +152,13 @@ export class VisitsController {
   async createNote(
     @CurrentClinicId() clinicId: string,
     @Param('id') visitId: string,
-    @Req() req: Request & { user?: AuthenticatedUser },
+    @Req() req: Request & { user?: AuthenticatedUser & { id?: string } },
     @Body() createNoteDto: CreateVisitNoteDto,
   ): Promise<VisitNote> {
     if (!this.visitNotesService) {
       throw new Error('VisitNotesService no disponible');
     }
-    const userId = req.user?.userId || (req.user as any)?.id;
+    const userId = req.user?.userId || req.user?.id;
     if (!userId) {
       throw new UnauthorizedException('Identificador de usuario no disponible en la sesión');
     }

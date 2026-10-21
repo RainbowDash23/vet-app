@@ -94,13 +94,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({
           id: response.user.id,
           email: response.user.email,
           name: response.user.name,
-          lastName: (response.user as any).lastName ?? null,
+          lastName: response.user.lastName ?? null,
           role: response.user.role,
           clinicId: response.clinicId || response.user.clinicId,
         };
         setUser(resolvedUser);
-      } catch (err: any) {
-        const message = err?.message || 'Error de autenticación. Verifica tus credenciales.';
+      } catch (err: unknown) {
+        const message =
+          err instanceof Error
+            ? err.message
+            : 'Error de autenticación. Verifica tus credenciales.';
         setError(message);
         throw err;
       } finally {
@@ -123,7 +126,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({
         id: response.user.id,
         email: response.user.email,
         name: response.user.name,
-        lastName: (response.user as any).lastName ?? null,
+        lastName: response.user.lastName ?? null,
         role: response.user.role,
         clinicId: response.clinicId || response.user.clinicId,
       };
