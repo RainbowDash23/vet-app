@@ -1,63 +1,64 @@
 :root {
   /* ==========================================================================
-     Sistema de Diseño VetApp - Tokens de Diseño Globales (RNF-3)
+     Sistema de Diseño VetApp - Tokens de Diseño Globales Sobrios (RNF-3)
+     Dirección estética: Utilitario clínico, sobrio, densificado, sin artificios.
      ========================================================================== */
 
-  /* --- Colores de Fondo y Superficie --- */
-  --color-bg-app: #090d16;
-  --color-bg-sidebar: #0f172a;
-  --color-bg-card: #131c31;
-  --color-bg-input: #1a243b;
-  --color-bg-hover: #1e2945;
-  --color-bg-active: #243254;
-  --color-bg-overlay: rgba(9, 13, 22, 0.75);
+  /* --- Colores de Fondo y Superficie Neutros --- */
+  --color-bg-app: #0c0e12;
+  --color-bg-sidebar: #11141a;
+  --color-bg-card: #151922;
+  --color-bg-input: #1a1f2c;
+  --color-bg-hover: #1f2535;
+  --color-bg-active: #252c3f;
+  --color-bg-overlay: rgba(12, 14, 18, 0.82);
 
-  /* --- Bordes y Separadores --- */
-  --color-border: #232f48;
-  --color-border-subtle: #1c273e;
-  --color-border-focus: #14b8a6;
-  --color-border-error: #f43f5e;
+  /* --- Bordes Nítidos de 1px --- */
+  --color-border: #27272a;
+  --color-border-subtle: #1f1f23;
+  --color-border-focus: #0ea5e9;
+  --color-border-error: #ef4444;
 
   /* --- Tipografía y Contenido --- */
-  --color-text-primary: #f8fafc;
-  --color-text-secondary: #94a3b8;
-  --color-text-muted: #64748b;
-  --color-text-disabled: #475569;
-  --color-text-inverse: #090d16;
+  --color-text-primary: #f4f4f5;
+  --color-text-secondary: #a1a1aa;
+  --color-text-muted: #71717a;
+  --color-text-disabled: #52525b;
+  --color-text-inverse: #09090b;
 
-  /* --- Acentos Clínicos (Teal / Verde Médico) --- */
-  --color-primary: #14b8a6;
-  --color-primary-hover: #0d9488;
-  --color-primary-active: #0f766e;
-  --color-primary-light: rgba(20, 184, 166, 0.15);
+  /* --- Acento Único Clínico (Azul Clínico #0ea5e9, sin gradientes ni morados) --- */
+  --color-primary: #0ea5e9;
+  --color-primary-hover: #0284c7;
+  --color-primary-active: #0369a1;
+  --color-primary-light: rgba(14, 165, 233, 0.12);
   --color-primary-foreground: #ffffff;
 
   /* --- Variantes Funcionales Secundarias y Destructivas --- */
-  --color-secondary: #1e293b;
-  --color-secondary-hover: #334155;
-  --color-secondary-active: #475569;
-  --color-secondary-foreground: #f8fafc;
-  --color-secondary-border: #334155;
+  --color-secondary: #1f2430;
+  --color-secondary-hover: #2a3142;
+  --color-secondary-active: #353e54;
+  --color-secondary-foreground: #f4f4f5;
+  --color-secondary-border: #27272a;
 
   --color-destructive: #ef4444;
   --color-destructive-hover: #dc2626;
   --color-destructive-active: #b91c1c;
   --color-destructive-foreground: #ffffff;
-  --color-destructive-light: rgba(239, 68, 68, 0.15);
+  --color-destructive-light: rgba(239, 68, 68, 0.12);
 
   /* --- Estados de Hardware Serial / NFC (RF-34) --- */
   --color-hw-connected: #10b981;
   --color-hw-disconnected: #ef4444;
   --color-hw-reconnecting: #f59e0b;
-  --color-hw-idle: #64748b;
+  --color-hw-idle: #71717a;
 
   /* --- Estados y Alertas del Sistema --- */
   --color-success: #10b981;
   --color-warning: #f59e0b;
-  --color-error: #f43f5e;
-  --color-info: #38bdf8;
+  --color-error: #ef4444;
+  --color-info: #0ea5e9;
 
-  /* --- Espaciado Dimensional Proporcional --- */
+  /* --- Espaciado Dimensional Compacto y Proporcional --- */
   --space-0: 0px;
   --space-1: 4px;
   --space-2: 8px;
@@ -70,9 +71,9 @@
   --space-12: 48px;
   --space-16: 64px;
 
-  /* --- Tipografía --- */
-  --font-family-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  --font-family-mono: 'JetBrains Mono', 'Fira Code', Menlo, Monaco, Consolas, monospace;
+  /* --- Tipografía de Sistema Estricta --- */
+  --font-family-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-family-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
   --font-size-xs: 0.75rem;    /* 12px */
   --font-size-sm: 0.875rem;   /* 14px */
@@ -92,28 +93,28 @@
   --line-height-normal: 1.5;
   --line-height-relaxed: 1.75;
 
-  /* --- Bordes Redondeados --- */
+  /* --- Bordes Redondeados Pequeños (2px a 6px, sin píldoras gigantes) --- */
   --radius-xs: 2px;
-  --radius-sm: 4px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
-  --radius-xl: 16px;
-  --radius-full: 9999px;
+  --radius-sm: 3px;
+  --radius-md: 4px;
+  --radius-lg: 6px;
+  --radius-xl: 6px;
+  --radius-full: 6px;
 
-  /* --- Sombras y Elevaciones --- */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -2px rgba(0, 0, 0, 0.5);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.6), 0 4px 6px -4px rgba(0, 0, 0, 0.6);
-  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.7), 0 8px 10px -6px rgba(0, 0, 0, 0.7);
-  --shadow-dialog: 0 25px 50px -12px rgba(0, 0, 0, 0.85);
+  /* --- Sombras Sutiles (0 1px 2px) o Sin Sombras --- */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.25);
+  --shadow-md: 0 1px 3px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 2px 4px rgba(0, 0, 0, 0.4);
+  --shadow-xl: 0 4px 6px rgba(0, 0, 0, 0.45);
+  --shadow-dialog: 0 4px 12px rgba(0, 0, 0, 0.6);
 
   /* --- Transiciones --- */
-  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-normal: 250ms cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-slow: 350ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-fast: 120ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-normal: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 300ms cubic-bezier(0.4, 0, 0.2, 1);
 
   /* --- Foco Accesible (WAI-ARIA Focus Visible) --- */
-  --focus-ring-color: #14b8a6;
+  --focus-ring-color: #0ea5e9;
   --focus-ring-offset: 2px;
   --focus-ring-width: 2px;
 
