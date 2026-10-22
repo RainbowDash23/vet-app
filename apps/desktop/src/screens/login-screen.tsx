@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Button, Input } from '../components/ui';
-import { WarningIcon, LockIcon } from '../components/ui/icons';
+import { WarningIcon } from '../components/ui/icons';
 import { ApiError } from '../services/api.client';
 import { useAuth } from '../context/auth.context';
 import styles from './login-screen.module.css';
@@ -92,7 +92,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
       <div className={styles.header}>
         <h1 className={styles.title}>Iniciar Sesión</h1>
         <p className={styles.subtitle}>
-          Ingresa con tus credenciales de la clínica (ADMIN, VET o RECEPTION)
+          Acceso para personal de la clínica
         </p>
       </div>
 
@@ -140,11 +140,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
           Ingresar al Sistema
         </Button>
       </form>
-
-      <div className={styles.securityNote}>
-        <LockIcon size={14} style={{ display: 'inline', verticalAlign: 'text-bottom', marginRight: '6px' }} />
-        Autenticación protegida con tokens JWT. Cero credenciales persistidas en disco (RNF-2).
-      </div>
     </div>
   );
 };

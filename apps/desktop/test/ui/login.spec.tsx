@@ -19,6 +19,9 @@ describe('UI Integration: LoginScreen (RF-1, RF-2, RNF-3)', () => {
     expect(screen.getByLabelText(/correo/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/contraseña/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /ingresar al sistema/i })).toBeInTheDocument();
+    expect(screen.getByText('Acceso para personal de la clínica')).toBeInTheDocument();
+    expect(screen.queryByText(/ADMIN, VET o RECEPTION/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Autenticación protegida con tokens JWT/i)).not.toBeInTheDocument();
   });
 
   it('debe invocar onSuccess cuando las credenciales son válidas', async () => {
