@@ -71,7 +71,7 @@ pnpm db:up
 pnpm --filter @vet-app/api exec prisma migrate deploy
 
 # PASO 3: Ejecutar la siembra inicial (Seed) de clínicas y usuarios RBAC
-pnpm --filter @vet-app/api prisma db seed
+pnpm --filter @vet-app/api exec prisma db seed
 
 # PASO 4: Iniciar el servidor Backend API (NestJS en http://localhost:3000)
 pnpm dev:api
@@ -81,16 +81,14 @@ pnpm dev:electron
 ```
 
 > [!IMPORTANT]
-> **Credenciales Iniciales de Acceso (Semilla)**
-> La siembra genera automáticamente los usuarios RBAC iniciales. El usuario administrador principal para pruebas es:
-> - **Correo:** `admin@vet.local`
-> - **Contraseña:** `VetApp2026!` (configurable mediante la variable `SEED_DEFAULT_PASSWORD` en el archivo `.env`)
-> - **Rol:** `ADMIN`
-> - **Clínica:** Clínica Veterinaria Central
+> **Credenciales Iniciales de Acceso (Semilla - Solo desarrollo, nunca usar en producción)**
+> La siembra genera automáticamente los usuarios RBAC iniciales con la contraseña por defecto `Password123!` (solo desarrollo, nunca usar en producción; configurable mediante la variable `SEED_DEFAULT_PASSWORD` en el archivo `.env`).
 > 
-> Otros usuarios de prueba creados por el seed:
-> - Veterinario: `vet@vet.local` / `VetApp2026!` (Rol `VET`)
-> - Recepcionista: `reception@vet.local` / `VetApp2026!` (Rol `RECEPTION`)
+> Usuarios de prueba disponibles:
+> - **Administrador:** `admin@vetapp.com` / `Password123!` (Rol `ADMIN`, Clínica Veterinaria Central `CLINIC-01`)
+> - **Veterinario:** `vet@vetapp.com` / `Password123!` (Rol `VET`, Clínica Veterinaria Central `CLINIC-01`, Licencia: `VET-98765`)
+> - **Recepcionista:** `reception@vetapp.com` / `Password123!` (Rol `RECEPTION`, Clínica Veterinaria Central `CLINIC-01`)
+> - **Veterinario Urgencias (Segunda clínica):** `vet2@hospitalvet24.com` / `Password123!` (Rol `VET`, Hospital Veterinario 24 Horas `CLINIC-02`, Licencia: `VET-11223`)
 
 ---
 
@@ -130,7 +128,7 @@ cp .env.example .env
 | `SMTP_PASS` | String | Contraseña de autenticación SMTP | `change_me` |
 | `SMTP_FROM` | String | Remitente de las notificaciones | `"Vet App <notificaciones@example.com>"` |
 | `SMTP_SECURE` | Booleano | TLS directo para puerto 465 (`false` para STARTTLS) | `false` |
-| `SEED_DEFAULT_PASSWORD` | String | Contraseña asignada a usuarios de prueba en la siembra | `VetApp2026!` |
+| `SEED_DEFAULT_PASSWORD` | String | Contraseña asignada a usuarios de prueba en la siembra (solo desarrollo, nunca usar en producción) | `Password123!` |
 | `SERIAL_PORT` | String | Puerto COM a conectar (ej: `COM3`, `/dev/ttyUSB0`) | Autodetección por VID/PID |
 | `SERIAL_DRIVER` | `serialport` \| `memory` | Controlador serie del lector (`memory` para desarrollo/simulación) | `serialport` |
 | `VITE_DEV_TOOLS` | Booleano | Muestra botón de simulación de llavero NFC en barra lateral | `false` (desactivado por defecto) |

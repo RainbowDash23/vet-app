@@ -18,6 +18,7 @@ export interface SeedUserData {
   licenseNumber?: string;
 }
 
+/** Contraseña de usuarios de prueba en siembra (solo desarrollo, nunca usar en producción). */
 export const DEFAULT_SEED_PASSWORD = 'Password123!';
 export const BCRYPT_ROUNDS = 12;
 
