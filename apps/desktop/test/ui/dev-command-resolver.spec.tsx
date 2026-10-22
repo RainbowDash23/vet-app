@@ -37,9 +37,38 @@ describe('Herramientas de Desarrollo: dev-command-resolver (Windows / Node 20.12
       expect(commands.electron.command).not.toMatch(/\.(cmd|bat)$/i);
       expect(commands.electron.command).not.toContain('pnpm.cmd');
       expect(commands.electron.command).not.toContain('electron.cmd');
-      // Debe ser el binario .exe nativo o process.execPath (node.exe)
-      expect(commands.electron.command).toMatch(/\.(exe)$|node\.exe$/i);
+      expect(typeof commands.electron.command).toBe('string');
+      expect(commands.electron.command.length).toBeGreaterThan(0);
       expect(commands.electron.args).toContain('dist-electron/main.js');
+      expect(commands.electron.shell).toBe(false);
+    });
+
+    it('en entorno win32 simulado con electron.exe nativo, resuelve el binario ejecutable directo', () => {
+      const mockRequire = ((specifier: string) => {
+        if (specifier === 'electron') {
+          return 'C:\\virtual\\electron.exe';
+        }
+        if (specifier === 'typescript/package.json') {
+          return { bin: { tsc: 'bin/tsc' } };
+        }
+        if (specifier === 'vite/package.json') {
+          return { bin: { vite: 'bin/vite.js' } };
+        }
+        return {};
+      }) as unknown as NodeRequire;
+
+      mockRequire.resolve = ((specifier: string) => {
+        return specifier;
+      }) as unknown as RequireResolve;
+
+      const commands = resolveDevCommands({
+        platform: 'win32',
+        execPath: 'C:\\Program Files\\nodejs\\node.exe',
+        require: mockRequire,
+      });
+
+      expect(commands.electron.command).toBe('C:\\virtual\\electron.exe');
+      expect(commands.electron.command).not.toMatch(/\.(cmd|bat)$/i);
       expect(commands.electron.shell).toBe(false);
     });
 
