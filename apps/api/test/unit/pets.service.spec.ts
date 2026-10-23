@@ -639,6 +639,64 @@ describe('PetsService & PetsController (T13 / RF-17, RF-18, RF-19, RF-20)', () =
       assert.ok(errors.some((e) => e.property === 'species'));
     });
 
+    it('CreatePetDto debe ser válido cuando birthDate es omitido (mascota sin fecha de nacimiento)', async () => {
+      const dto = plainToInstance(CreatePetDto, {
+        name: 'Rocky',
+        species: PetSpecies.CANINE,
+        ownerId: '11111111-1111-4111-8111-111111111111',
+      });
+      const errors = await validate(dto as object);
+      assert.strictEqual(errors.length, 0);
+    });
+
+    it('CreatePetDto debe ser válido con birthDate válida en el pasado y aproximada', async () => {
+      const dto = plainToInstance(CreatePetDto, {
+        name: 'Rocky',
+        species: PetSpecies.CANINE,
+        birthDate: '2022-03-15T00:00:00.000Z',
+        isApproximateBirthDate: true,
+        ownerId: '11111111-1111-4111-8111-111111111111',
+      });
+      const errors = await validate(dto as object);
+      assert.strictEqual(errors.length, 0);
+      assert.strictEqual(dto.isApproximateBirthDate, true);
+    });
+
+    it('CreatePetDto debe fallar si birthDate es una fecha futura', async () => {
+      const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+      const dto = plainToInstance(CreatePetDto, {
+        name: 'Rocky',
+        species: PetSpecies.CANINE,
+        birthDate: tomorrow,
+        ownerId: '11111111-1111-4111-8111-111111111111',
+      });
+      const errors = await validate(dto as object);
+      const birthDateError = errors.find((e) => e.property === 'birthDate');
+      assert.ok(birthDateError, 'Debe arrojar error en birthDate');
+      assert.ok(
+        Object.values(birthDateError.constraints || {}).some((msg) =>
+          msg.includes('no puede ser una fecha futura'),
+        ),
+      );
+    });
+
+    it('CreatePetDto debe fallar si birthDate es una cadena vacía', async () => {
+      const dto = plainToInstance(CreatePetDto, {
+        name: 'Rocky',
+        species: PetSpecies.CANINE,
+        birthDate: '',
+        ownerId: '11111111-1111-4111-8111-111111111111',
+      });
+      const errors = await validate(dto as object);
+      const birthDateError = errors.find((e) => e.property === 'birthDate');
+      assert.ok(birthDateError, 'Debe arrojar error en birthDate ante cadena vacía');
+      assert.ok(
+        Object.values(birthDateError.constraints || {}).some((msg) =>
+          msg.includes('fecha válida'),
+        ),
+      );
+    });
+
     it('CreatePetDto debe fallar si birthDate no es una fecha válida', async () => {
       const dto = plainToInstance(CreatePetDto, {
         name: 'Toby',

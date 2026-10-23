@@ -7,6 +7,7 @@ import {
   IsString,
   IsUUID,
   Length,
+  MaxDate,
   MaxLength,
 } from 'class-validator';
 import { PetSex, PetSpecies, ReproductiveStatus } from '@prisma/client';
@@ -43,6 +44,7 @@ export class UpdatePetDto {
   @IsOptional()
   @Type(() => Date)
   @IsDate({ message: 'La fecha de nacimiento debe ser una fecha válida (formato ISO-8601)' })
+  @MaxDate(() => new Date(), { message: 'La fecha de nacimiento no puede ser una fecha futura' })
   birthDate?: Date;
 
   @IsOptional()

@@ -8,6 +8,7 @@ import {
   IsString,
   IsUUID,
   Length,
+  MaxDate,
   MaxLength,
 } from 'class-validator';
 import { PetSex, PetSpecies, ReproductiveStatus } from '@prisma/client';
@@ -40,10 +41,11 @@ export class CreatePetDto {
   })
   sex?: PetSex = PetSex.UNKNOWN;
 
-  @IsNotEmpty({ message: 'La fecha de nacimiento es obligatoria' })
+  @IsOptional()
   @Type(() => Date)
   @IsDate({ message: 'La fecha de nacimiento debe ser una fecha válida (formato ISO-8601)' })
-  birthDate!: Date;
+  @MaxDate(() => new Date(), { message: 'La fecha de nacimiento no puede ser una fecha futura' })
+  birthDate?: Date | null;
 
   @IsOptional()
   @IsBoolean({ message: 'isApproximateBirthDate debe ser un valor booleano' })
