@@ -8,6 +8,7 @@ export interface CreateVisitDto {
   petId: string;
   reason: string;
   startTime: string | Date;
+  scheduledDate?: string | Date;
   durationMinutes?: number;
   notes?: string | null;
 }

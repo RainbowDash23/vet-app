@@ -24,7 +24,14 @@ export class CreateVisitDto {
   vetId!: string;
 
   @IsDateString({}, { message: 'La fecha programada debe tener un formato ISO 8601 válido' })
+  @Transform(({ value, obj }: { value: unknown; obj?: { startTime?: string; scheduledDate?: string } }) => {
+    return value || obj?.startTime;
+  })
   scheduledDate!: string;
+
+  @IsOptional()
+  @IsDateString({}, { message: 'startTime debe tener un formato ISO 8601 válido' })
+  startTime?: string;
 
   @IsOptional()
   @Type(() => Number)

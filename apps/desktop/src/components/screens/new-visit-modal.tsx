@@ -126,6 +126,7 @@ export const NewVisitModal: React.FC<NewVisitModalProps> = ({
         petId: petId.trim(),
         vetId: vetId.trim(),
         startTime: startTimeIso,
+        scheduledDate: startTimeIso,
         durationMinutes: duration,
         reason: reason.trim(),
       };
