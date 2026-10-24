@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useContext } from 'react';
+import { AuthContext } from '../context/auth.context';
 import {
   PetSpecies,
   PetSex,
@@ -42,6 +43,10 @@ export interface PatientFileScreenProps {
    * ID de la mascota si se accede directamente por navegación interna.
    */
   petId?: string;
+  /**
+   * ID de la clínica en sesión activa (para control de acceso a datos de emergencia).
+   */
+  currentClinicId?: string;
   /**
    * Callback invocado cuando se escanea un tag no registrado en el sistema (RF-29).
    */
@@ -93,6 +98,7 @@ type TabType = 'summary' | 'history' | 'vaccines';
 export const PatientFileScreen: React.FC<PatientFileScreenProps> = ({
   uid,
   petId,
+  currentClinicId,
   onUnregisteredTag,
   onBack,
   petsService = defaultPetsService,
@@ -122,6 +128,63 @@ export const PatientFileScreen: React.FC<PatientFileScreenProps> = ({
   const [resolutionTimeMs, setResolutionTimeMs] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<TabType>(initialTab);
   const [showAssignModal, setShowAssignModal] = useState<boolean>(false);
+  const [publicCode, setPublicCode] = useState<string | null>(initialData?.publicCode || null);
+  const [copiedLink, setCopiedLink] = useState<boolean>(false);
+
+  const authContext = useContext(AuthContext);
+  const effectiveClinicId = currentClinicId ?? authContext?.clinicId ?? authContext?.user?.clinicId;
+  const resolvedPet = data?.pet as PetResponseDto | undefined;
+  const petOriginClinicId = resolvedPet?.createdByClinicId;
+  const isOriginClinic = Boolean(
+    effectiveClinicId && petOriginClinicId && effectiveClinicId === petOriginClinicId
+  );
+
+  useEffect(() => {
+    let isMounted = true;
+    if (data?.publicCode) {
+      setPublicCode(data.publicCode);
+      return;
+    }
+    const targetPetId = (data?.pet as PetResponseDto)?.id || petId;
+    if (isOriginClinic && targetPetId) {
+      petsService
+        .getTagsByPet(targetPetId)
+        .then((tagsList) => {
+          if (isMounted && tagsList && tagsList.length > 0) {
+            const activeTag = tagsList.find((t) => t.status === 'ACTIVE') || tagsList[0];
+            if (activeTag?.publicCode) {
+              setPublicCode(activeTag.publicCode);
+            }
+          }
+        })
+        .catch(() => {});
+    } else {
+      setPublicCode(null);
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, [data?.publicCode, data?.pet, petId, isOriginClinic, petsService]);
+
+  const publicBaseUrl = (
+    (typeof process !== 'undefined' && process.env?.VITE_PUBLIC_URL) ||
+    import.meta.env?.VITE_PUBLIC_URL ||
+    'http://localhost:3000/p'
+  ).replace(/\/+$/, '');
+  const emergencyUrl = publicCode ? `${publicBaseUrl}/${publicCode}` : null;
+
+  const handleCopyEmergencyLink = async () => {
+    if (!emergencyUrl) return;
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard) {
+        await navigator.clipboard.writeText(emergencyUrl);
+      }
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2000);
+    } catch {
+      // Fallback
+    }
+  };
 
   const onUnregisteredTagRef = useRef(onUnregisteredTag);
   onUnregisteredTagRef.current = onUnregisteredTag;
@@ -535,6 +598,38 @@ export const PatientFileScreen: React.FC<PatientFileScreenProps> = ({
             </div>
           )}
         </div>
+
+        {/* Sección de Emergencia y Código Público del Llavero (RF-70, Problem D) */}
+        {isOriginClinic && publicCode && (
+          <div className={styles.emergencyCard} data-testid="emergency-tag-card">
+            <div className={styles.emergencyCardHeader}>
+              <span className={styles.emergencyCardTitle}>Identificador Público y Enlace de Emergencia</span>
+              <span className={styles.emergencyBadge}>Llavero Activo</span>
+            </div>
+            <p className={styles.emergencyDescription}>
+              Enlace de rescate público accesible mediante QR o navegador en caso de extravío.
+              Solo muestra datos de contacto de emergencia, protegiendo el historial médico.
+            </p>
+            <div className={styles.emergencyRow}>
+              <div className={styles.emergencyField}>
+                <span className={styles.emergencyLabel}>Código Público:</span>
+                <code className={styles.emergencyCode}>{publicCode}</code>
+              </div>
+              <div className={styles.emergencyField}>
+                <span className={styles.emergencyLabel}>URL de Emergencia:</span>
+                <span className={styles.emergencyUrl}>{emergencyUrl}</span>
+              </div>
+              <button
+                type="button"
+                className={styles.copyButton}
+                onClick={handleCopyEmergencyLink}
+                aria-label="Copiar enlace de emergencia"
+              >
+                {copiedLink ? '¡Copiado!' : 'Copiar enlace'}
+              </button>
+            </div>
+          </div>
+        )}
       </section>
 
       {/* VISTA SEGÚN CONSENTIMIENTO (RF-21 vs RF-23) */}

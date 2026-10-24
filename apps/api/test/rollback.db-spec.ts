@@ -16,6 +16,7 @@ import {
   PET_1_ID,
   OWNER_1_ID,
   TAG_1_UID,
+  request,
 } from './e2e-helper';
 
 describe('E2E: Transaccionalidad Atómica y Reversión Total (Rollback) contra PostgreSQL Real (RF-56)', () => {
@@ -266,6 +267,94 @@ describe('E2E: Transaccionalidad Atómica y Reversión Total (Rollback) contra P
 
       // Limpieza
       await prisma.pet.delete({ where: { id: petId } });
+    });
+  });
+
+  describe('4. Flujo End-to-End en PostgreSQL Real: Dueño, Mascota, Tag, /p/:publicCode y 404 para UID (RF-64)', () => {
+    it('debe crear dueño, mascota, asignar tag, retornar 200 HTML en /p/:publicCode y 404 para el UID físico', async () => {
+      const ownerId = crypto.randomUUID();
+      const petId = crypto.randomUUID();
+      const testUid = '04EE' + Date.now().toString(16).slice(-8).toUpperCase();
+
+      // 1. Crear dueño en PostgreSQL real
+      const owner = await prisma.owner.create({
+        data: {
+          id: ownerId,
+          documentId: 'DOC-REAL-' + Date.now().toString().slice(-6),
+          name: 'Roberto',
+          lastName: 'Gómez',
+          phone: '+593912345678',
+          email: 'roberto.' + Date.now() + '@example.com',
+          address: 'Av. Amazonas 1234',
+        },
+      });
+
+      // 2. Crear mascota en PostgreSQL real
+      const pet = await prisma.pet.create({
+        data: {
+          id: petId,
+          name: 'Zeus',
+          species: 'CANINE',
+          breed: 'Dóberman',
+          sex: 'MALE',
+          birthDate: new Date('2022-01-15T00:00:00.000Z'),
+          color: 'Negro y Fuego',
+          ownerId: owner.id,
+          createdByClinicId: CLINIC_A_ID,
+          isApproximateBirthDate: false,
+        },
+      });
+
+      // 3. Asignar tag NFC
+      const tag = await tagsService.assignTag({ petId: pet.id, uid: testUid }, CLINIC_A_ID);
+      assert.ok(tag.id, 'Tag debe tener id');
+      assert.strictEqual(tag.uid, testUid);
+      assert.ok(tag.publicCode, 'Tag debe generar publicCode');
+
+      // 4. GET /p/:publicCode -> debe responder 200 con HTML de la mascota
+      const emergencyRes = await request(app.getHttpServer()).get('/p/' + tag.publicCode);
+      assert.strictEqual(emergencyRes.status, 200);
+      assert.ok(
+        emergencyRes.headers['content-type']?.includes('text/html'),
+        'Debe responder con text/html',
+      );
+      assert.ok(emergencyRes.text.includes('Zeus'), 'HTML debe mostrar nombre de la mascota');
+      assert.ok(emergencyRes.text.includes('Roberto Gómez'), 'HTML debe mostrar nombre del dueño');
+      assert.ok(emergencyRes.text.includes('+593912345678'), 'HTML debe mostrar teléfono del dueño');
+      assert.strictEqual(
+        emergencyRes.text.includes('Av. Amazonas 1234'),
+        false,
+        'HTML NO debe exponer la dirección física del dueño',
+      );
+
+      // 5. GET /p/<UID> -> debe responder 404 (el UID físico NUNCA debe resolver la página pública)
+      const uidRes = await request(app.getHttpServer()).get('/p/' + testUid);
+      assert.strictEqual(uidRes.status, 404, 'El UID físico debe responder 404 en el portal público');
+      assert.ok(
+        uidRes.text.toLowerCase().includes('no encontrad') ||
+          uidRes.text.toLowerCase().includes('404'),
+        'Debe devolver página 404',
+      );
+
+      // 6. Aislamiento de tags por clínica (cross-tenant 404)
+      const ownerClinicTags = await tagsService.findByPetId(pet.id, CLINIC_A_ID);
+      assert.strictEqual(ownerClinicTags.length, 1);
+      assert.strictEqual(ownerClinicTags[0].publicCode, tag.publicCode);
+
+      await assert.rejects(
+        async () => tagsService.findByPetId(pet.id, CLINIC_B_ID),
+        (err) => {
+          const e = err as Error;
+          assert.strictEqual(e.name, 'NotFoundException');
+          assert.ok(e.message?.includes('no encontrados o no autorizados'));
+          return true;
+        },
+      );
+
+      // 7. Limpieza en PostgreSQL real
+      await prisma.tag.deleteMany({ where: { petId: pet.id } });
+      await prisma.pet.delete({ where: { id: pet.id } });
+      await prisma.owner.delete({ where: { id: owner.id } });
     });
   });
 });

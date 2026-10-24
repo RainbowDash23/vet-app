@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import type { Role, SerialPortInfo } from '@vet-app/shared-types';
+import React, { useEffect, useState, useCallback } from 'react';
+import type { Role, SerialPortInfo, HardwareStatus } from '@vet-app/shared-types';
 import { fakeTagReader } from '../../readers/fake-tag-reader';
 import {
   ClinicIcon,
@@ -83,36 +83,85 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [selectedPort, setSelectedPort] = useState<string>('');
   const [portError, setPortError] = useState<string | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
+  const [hardwareStatus, setHardwareStatus] = useState<HardwareStatus>({
+    connected: false,
+    portName: null,
+    reconnecting: false,
+    attemptCount: 0,
+    reason: null,
+  });
   const showDevTools = import.meta.env?.VITE_DEV_TOOLS === 'true';
 
-  // Suscripción al lector de tags (tanto la implementación simulada como eventos nativos)
+  // Consulta periódica y manual de puertos seriales disponibles (refresco cada 2 s)
+  const refreshPorts = useCallback(async () => {
+    if (typeof window !== 'undefined' && window.electronAPI?.listSerialPorts) {
+      try {
+        const list = await window.electronAPI.listSerialPorts();
+        const safeList = list || [];
+        setPorts(safeList);
+        setSelectedPort((current) => {
+          if (current && safeList.some((p) => p.path === current)) {
+            return current;
+          }
+          if (hardwareStatus.portName && safeList.some((p) => p.path === hardwareStatus.portName)) {
+            return hardwareStatus.portName;
+          }
+          const esp = safeList.find((p) => p.isEsp32);
+          return esp ? esp.path : safeList[0]?.path || '';
+        });
+      } catch {
+        // Silencioso en caso de entorno sin soporte serial
+      }
+    }
+  }, [hardwareStatus.portName]);
+
+  // Suscripción al lector de tags, estado de hardware y refresco periódico cada 2 s
   useEffect(() => {
     const unsubscribe = fakeTagReader.onTag((uid) => {
       setLastScannedUid(uid);
     });
 
-    let electronUnsub: (() => void) | undefined;
-    if (typeof window !== 'undefined' && window.electronAPI?.onTagDetected) {
-      electronUnsub = window.electronAPI.onTagDetected((uid) => {
-        setLastScannedUid(uid);
-      });
+    let electronTagUnsub: (() => void) | undefined;
+    let electronStatusUnsub: (() => void) | undefined;
+
+    if (typeof window !== 'undefined' && window.electronAPI) {
+      if (window.electronAPI.onTagDetected) {
+        electronTagUnsub = window.electronAPI.onTagDetected((uid) => {
+          setLastScannedUid(uid);
+        });
+      }
+
+      if (window.electronAPI.getHardwareStatus) {
+        window.electronAPI.getHardwareStatus().then((initialStatus) => {
+          if (initialStatus) {
+            setHardwareStatus(initialStatus);
+          }
+        }).catch(() => {});
+      }
+
+      if (window.electronAPI.onHardwareStatusChange) {
+        electronStatusUnsub = window.electronAPI.onHardwareStatusChange((nextStatus) => {
+          setHardwareStatus(nextStatus);
+          if (nextStatus.connected && nextStatus.portName) {
+            setSelectedPort(nextStatus.portName);
+            setPortError(null);
+          }
+        });
+      }
     }
 
-    if (typeof window !== 'undefined' && window.electronAPI?.listSerialPorts) {
-      window.electronAPI.listSerialPorts().then((list) => {
-        if (list && list.length > 0) {
-          setPorts(list);
-          const esp = list.find((p) => p.isEsp32);
-          setSelectedPort(esp ? esp.path : list[0].path);
-        }
-      }).catch(() => {});
-    }
+    void refreshPorts();
+    const intervalId = setInterval(() => {
+      void refreshPorts();
+    }, 2000);
 
     return () => {
       unsubscribe();
-      electronUnsub?.();
+      electronTagUnsub?.();
+      electronStatusUnsub?.();
+      clearInterval(intervalId);
     };
-  }, []);
+  }, [refreshPorts]);
 
   const handleConnectPort = async () => {
     if (!selectedPort || !window.electronAPI?.connectSerialPort) {
@@ -124,11 +173,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
       const res = await window.electronAPI.connectSerialPort(selectedPort);
       if (!res.success) {
         setPortError(res.error || 'Error al conectar al puerto serial');
+      } else {
+        setPortError(null);
       }
     } catch (err: unknown) {
       setPortError((err as Error)?.message || 'Error al conectar al puerto serial');
     } finally {
       setIsConnecting(false);
+      void refreshPorts();
     }
   };
 
@@ -205,6 +257,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <span className={styles.nfcBadge}>{showDevTools ? 'Dev / Serial' : 'Serial USB'}</span>
           </div>
 
+          <div className={styles.nfcStatusRow}>
+            <span className={hardwareStatus.connected ? styles.statusConnected : styles.statusDisconnected}>
+              {hardwareStatus.connected
+                ? `Conectado: ${hardwareStatus.portName || selectedPort}`
+                : hardwareStatus.reconnecting
+                ? `Reconectando (${hardwareStatus.attemptCount}/10)...`
+                : hardwareStatus.reason
+                ? `Desconectado (${hardwareStatus.reason})`
+                : 'Desconectado'}
+            </span>
+          </div>
+
           <div className={styles.nfcUid}>
             {lastScannedUid ? (
               <span>UID: {lastScannedUid}</span>
@@ -213,7 +277,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             )}
           </div>
 
-          {ports.length > 0 && (
+          {ports.length > 0 ? (
             <div className={styles.portSelectGroup}>
               <select
                 className={styles.portSelect}
@@ -230,13 +294,34 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   </option>
                 ))}
               </select>
+              <div className={styles.portActions}>
+                <button
+                  type="button"
+                  className={styles.portConnectButton}
+                  onClick={handleConnectPort}
+                  disabled={isConnecting || !selectedPort}
+                >
+                  {isConnecting ? 'Conectando...' : 'Conectar puerto'}
+                </button>
+                <button
+                  type="button"
+                  className={styles.portRefreshButton}
+                  onClick={() => void refreshPorts()}
+                  title="Actualizar lista de puertos COM"
+                >
+                  Actualizar
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className={styles.noPortsGroup}>
+              <span className={styles.noPortsText}>No se detectaron puertos COM</span>
               <button
                 type="button"
-                className={styles.portConnectButton}
-                onClick={handleConnectPort}
-                disabled={isConnecting || !selectedPort}
+                className={styles.portRefreshButton}
+                onClick={() => void refreshPorts()}
               >
-                {isConnecting ? 'Conectando...' : 'Conectar puerto'}
+                Actualizar
               </button>
             </div>
           )}

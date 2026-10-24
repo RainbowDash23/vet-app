@@ -27,6 +27,8 @@ export interface ResolveTagSuccessDto {
   pet: PetResponseDto | PetMinimalFiliationDto;
   hasFullAccess: boolean;
   grant?: AccessGrantInterface | null;
+  tag?: TagResponseDto | null;
+  publicCode?: string;
 }
 
 export interface ResolveTagUnregisteredDto {

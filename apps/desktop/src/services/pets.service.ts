@@ -4,6 +4,7 @@ import type {
   PaginatedResult,
   ResolveTagResponseDto,
   VisitResponseDto,
+  TagResponseDto,
 } from '@vet-app/shared-types';
 import { ApiClient, ApiError, apiClient as defaultApiClient } from './api.client';
 
@@ -111,8 +112,17 @@ export class PetsService {
    * Vincula un transpondedor físico libre a una mascota registrada (RF-30).
    * Lanza ApiError con status 409 si el UID o la mascota ya posee un tag activo (RF-31).
    */
-  public async assignTag(dto: { uid: string; petId: string }): Promise<any> {
-    return this.apiClient.post<any>('/tags/assign', dto);
+  public async assignTag(dto: { uid: string; petId: string }): Promise<TagResponseDto> {
+    return this.apiClient.post<TagResponseDto>('/tags/assign', dto);
+  }
+
+  /**
+   * Consulta los tags asignados a una mascota (RF-61).
+   * Solo disponible si el usuario autenticado pertenece a la clínica de origen (404 cross-tenant).
+   */
+  public async getTagsByPet(petId: string): Promise<TagResponseDto[]> {
+    const encodedPetId = encodeURIComponent(petId.trim());
+    return this.apiClient.get<TagResponseDto[]>(`/tags/pet/${encodedPetId}`);
   }
 
   /**

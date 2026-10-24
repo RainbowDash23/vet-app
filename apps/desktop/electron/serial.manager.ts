@@ -2,6 +2,7 @@ import { EventEmitter } from 'events';
 import type { HardwareStatus, SerialPortInfo } from '@vet-app/shared-types';
 import type { ITagReader } from '../src/readers/tag-reader.interface';
 import { SerialPortDriver } from './serialport.driver.ts';
+import { getLastUsedPort, setLastUsedPort } from './serial-config.ts';
 
 /**
  * Expresión regular obligatoria de sanitización de tramas seriales NFC (RF-27).
@@ -35,6 +36,7 @@ export interface SerialDriver {
   onData?: (callback: (chunk: string | Buffer) => void) => void;
   onError?: (callback: (error: Error) => void) => void;
   onClose?: (callback: () => void) => void;
+  getLastError?: () => string | null;
 }
 
 /**
@@ -42,17 +44,29 @@ export interface SerialDriver {
  */
 export class InMemorySerialDriver implements SerialDriver {
   public isOpen = false;
+  public shouldFail = false;
+  public lastError: string | null = null;
   private dataCallback?: (chunk: string | Buffer) => void;
   private closeCallback?: () => void;
   private errorCallback?: (error: Error) => void;
 
   public async open(_portName: string, _baudRate: number): Promise<boolean> {
+    if (this.shouldFail) {
+      this.isOpen = false;
+      this.lastError = 'Puerto no disponible o en uso';
+      return false;
+    }
     this.isOpen = true;
+    this.lastError = null;
     return true;
   }
 
   public async close(): Promise<void> {
     this.isOpen = false;
+  }
+
+  public getLastError(): string | null {
+    return this.lastError;
   }
 
   public onData(callback: (chunk: string | Buffer) => void): void {
@@ -88,6 +102,7 @@ export interface SerialManagerOptions {
   maxReconnectAttempts?: number;
   baudRate?: number;
   defaultPort?: string;
+  listPortsFn?: () => Promise<SerialPortInfo[]>;
 }
 
 /**
@@ -100,6 +115,7 @@ export class SerialManager extends EventEmitter implements ITagReader {
   private readonly reconnectIntervalMs: number;
   private readonly maxReconnectAttempts: number;
   private readonly baudRate: number;
+  private readonly listPortsFn?: () => Promise<SerialPortInfo[]>;
 
   private currentPort: string | null = null;
   private buffer = '';
@@ -111,6 +127,7 @@ export class SerialManager extends EventEmitter implements ITagReader {
     portName: null,
     reconnecting: false,
     attemptCount: 0,
+    reason: null,
   };
 
   constructor(options: SerialManagerOptions = {}) {
@@ -124,6 +141,7 @@ export class SerialManager extends EventEmitter implements ITagReader {
     this.maxReconnectAttempts = options.maxReconnectAttempts ?? MAX_RECONNECT_ATTEMPTS;
     this.baudRate = options.baudRate ?? DEFAULT_BAUD_RATE;
     this.currentPort = options.defaultPort ?? null;
+    this.listPortsFn = options.listPortsFn;
 
     this.setupDriverListeners();
   }
@@ -166,37 +184,93 @@ export class SerialManager extends EventEmitter implements ITagReader {
    * Enumera los puertos seriales detectados en el sistema (RF-67).
    */
   public async listPorts(): Promise<SerialPortInfo[]> {
+    if (this.listPortsFn) {
+      return await this.listPortsFn();
+    }
     return SerialPortDriver.listAvailablePorts();
   }
 
   /**
-   * Conecta al puerto serial especificado o al puerto predeterminado.
+   * Conecta al puerto serial especificado o al puerto autodetectado.
+   * Si no se detecta ningún puerto, el estado queda DESCONECTADO (sin inventar 'COM3').
    */
   public async connect(portName?: string): Promise<boolean> {
     this.clearReconnectTimer();
     this.isManualDisconnect = false;
 
-    let targetPort = portName || this.currentPort;
+    let targetPort = portName ? portName.trim() : null;
+
     if (!targetPort) {
-      targetPort = (await SerialPortDriver.detectEsp32Port()) || 'COM3';
+      if (process.env.SERIAL_PORT) {
+        targetPort = process.env.SERIAL_PORT.trim();
+      } else {
+        const availablePorts = await this.listPorts();
+        const lastUsed = getLastUsedPort();
+
+        // 1. Si había un último puerto usado y sigue disponible en la lista actual, tiene prioridad
+        if (lastUsed && availablePorts.some((p) => p.path === lastUsed)) {
+          targetPort = lastUsed;
+        } else {
+          // 2. Preselección por VID/PID conocido de ESP32 (CP210x o CH340)
+          const espPort = availablePorts.find(
+            (p) => p.isEsp32 || SerialPortDriver.isEsp32Device(p)
+          );
+          if (espPort) {
+            targetPort = espPort.path;
+          }
+        }
+      }
     }
+
+    // 3. Regla obligatoria: El sistema no deberá usar un puerto por defecto inventado (RF-66).
+    // Si no detecta puerto, el estado será "Desconectado" y no intentará abrir ningún COM.
+    if (!targetPort) {
+      this.currentPort = null;
+      this.updateStatus({
+        connected: false,
+        portName: null,
+        reconnecting: false,
+        attemptCount: 0,
+        reason: 'No se detectó ningún lector NFC conectado',
+      });
+      return false;
+    }
+
     this.currentPort = targetPort;
 
     try {
       const opened = await this.driver.open(targetPort, this.baudRate);
       if (!opened) {
+        const reason = this.getLastError() || `No se pudo abrir el puerto serial ${targetPort}`;
+        this.updateStatus({
+          connected: false,
+          portName: targetPort,
+          reconnecting: false,
+          attemptCount: 0,
+          reason,
+        });
         return false;
       }
 
+      setLastUsedPort(targetPort);
       this.updateStatus({
         connected: true,
         portName: targetPort,
         reconnecting: false,
         attemptCount: 0,
+        reason: null,
       });
 
       return true;
-    } catch {
+    } catch (err: unknown) {
+      const reason = (err as Error)?.message || this.getLastError() || `Error inesperado al abrir ${targetPort}`;
+      this.updateStatus({
+        connected: false,
+        portName: targetPort,
+        reconnecting: false,
+        attemptCount: 0,
+        reason,
+      });
       return false;
     }
   }
@@ -215,6 +289,7 @@ export class SerialManager extends EventEmitter implements ITagReader {
       portName: null,
       reconnecting: false,
       attemptCount: 0,
+      reason: null,
     });
   }
 
@@ -236,6 +311,7 @@ export class SerialManager extends EventEmitter implements ITagReader {
       portName: this.currentPort,
       reconnecting: true,
       attemptCount: 1,
+      reason: 'Conexión serial perdida, reintentando...',
     });
 
     this.scheduleNextReconnect();
@@ -260,7 +336,18 @@ export class SerialManager extends EventEmitter implements ITagReader {
       return;
     }
 
-    const targetPort = this.currentPort || 'COM3';
+    const targetPort = this.currentPort;
+    if (!targetPort) {
+      this.clearReconnectTimer();
+      this.updateStatus({
+        connected: false,
+        portName: null,
+        reconnecting: false,
+        attemptCount: 0,
+        reason: 'No hay puerto configurado para reconectar',
+      });
+      return;
+    }
 
     try {
       const opened = await this.driver.open(targetPort, this.baudRate);
@@ -273,6 +360,7 @@ export class SerialManager extends EventEmitter implements ITagReader {
           portName: targetPort,
           reconnecting: false,
           attemptCount: 0,
+          reason: null,
         });
         return;
       }
@@ -292,6 +380,7 @@ export class SerialManager extends EventEmitter implements ITagReader {
         portName: targetPort,
         reconnecting: false,
         attemptCount: this.maxReconnectAttempts,
+        reason: this.getLastError() || `Se agotaron los ${this.maxReconnectAttempts} intentos de reconexión`,
       });
       return;
     }
@@ -302,6 +391,7 @@ export class SerialManager extends EventEmitter implements ITagReader {
       portName: targetPort,
       reconnecting: true,
       attemptCount: nextAttempt,
+      reason: this.getLastError() || `Reintentando conexión (${nextAttempt}/${this.maxReconnectAttempts})...`,
     });
 
     this.scheduleNextReconnect();
@@ -432,3 +522,4 @@ export class SerialManager extends EventEmitter implements ITagReader {
     this.processIncomingData(`UID:${cleanUid}\r\n`);
   }
 }
+

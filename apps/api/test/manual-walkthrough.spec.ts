@@ -120,6 +120,19 @@ describe('PASO 12: Recorrido Manual Integral de la API (End-to-End Walkthrough)'
       assert.ok(!html.includes('carlos.'), 'El HTML NO debe exponer el correo electrónico');
       console.log(' -> Portal público SSR verificado exitosamente (Datos visibles: Mascota y Teléfono; Datos privados censurados).');
 
+      // 6b. VERIFICAR QUE GET /p/<UID> DEVUELVE 404 (el UID físico NUNCA debe resolver la página pública)
+      console.log(`\n[6b/7] Comprobando que GET /p/${testUid} (UID físico) devuelve 404...`);
+      const uidEmergencyRes = await request(server)
+        .get(`/p/${testUid}`)
+        .expect(404);
+      assert.equal(uidEmergencyRes.status, 404);
+      assert.ok(
+        uidEmergencyRes.text.toLowerCase().includes('no encontrad') ||
+        uidEmergencyRes.text.toLowerCase().includes('404'),
+        'El portal público debe rechazar la resolución por UID físico con 404'
+      );
+      console.log(' -> Comprobado: el UID nunca resuelve la página pública (responde 404).');
+
       // 7. AGENDAR DOS VISITAS SOLAPADAS Y COMPROBAR EL HTTP 409 CONFLICT
       console.log('\n[7/7] Verificando detección algorítmica de solapamiento de agenda...');
       const vetId = 'bbbbbbbb-1111-4111-8111-bbbbbbbbbbbb'; // Dr. vet A

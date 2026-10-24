@@ -712,6 +712,23 @@ describe('TagsService & TagsController (T16 / RF-28, RF-29, RF-30, RF-31, RF-32,
       assert.strictEqual(result[0].id, 'tag-recent');
       assert.strictEqual(result[1].id, 'tag-old');
     });
+
+    it('debe rechazar con 404 NotFound si la clínica solicitante no es la creadora de la mascota (aislamiento cross-tenant)', async () => {
+      mockPrisma.pet.findFirst = async () => ({
+        id: samplePetId,
+        createdByClinicId: 'other-clinic-uuid',
+        deletedAt: null,
+      });
+
+      await assert.rejects(
+        async () => tagsService.findByPetId(samplePetId, sampleClinicId),
+        (err: any) => {
+          assert.strictEqual(err.name, 'NotFoundException');
+          assert.ok(err.message.includes('no encontrados o no autorizados'));
+          return true;
+        },
+      );
+    });
   });
 
   describe('5. Validación de DTOs con class-validator', () => {

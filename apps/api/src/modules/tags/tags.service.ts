@@ -164,12 +164,15 @@ export class TagsService {
       owner: sanitizedOwner,
     };
 
+    const isOriginClinic = tag.pet.createdByClinicId === clinicId;
+
     return {
       registered: true as const,
       uid,
       pet: sanitizedPet,
       hasFullAccess: true,
       grant,
+      ...(isOriginClinic ? { tag, publicCode: tag.publicCode } : {}),
     };
   }
 
@@ -304,10 +307,8 @@ export class TagsService {
     }
 
     const isOrigin = pet.createdByClinicId === clinicId;
-    const hasVisitsInClinic = pet.visits?.some((v: any) => v.clinicId === clinicId);
-    const hasGrant = await this.accessGrantsService.hasActiveGrant(petId, clinicId);
 
-    if (!isOrigin && !hasVisitsInClinic && !hasGrant) {
+    if (!isOrigin) {
       throw new NotFoundException('Tags de mascota no encontrados o no autorizados');
     }
 

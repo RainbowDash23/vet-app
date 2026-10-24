@@ -204,6 +204,7 @@ export const AppContent: React.FC<AppContentProps> = ({
       case 'clinical-record':
         return (
           <PatientFileScreen
+            currentClinicId={user?.clinicId}
             petsService={petsServiceInstance}
             uid={activePetUid}
             petId={activePetId}

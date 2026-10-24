@@ -39,6 +39,7 @@ export interface PetResponseDto {
   reproductiveStatus: ReproductiveStatus;
   notes?: string | null;
   ownerId: string;
+  createdByClinicId?: string | null;
   createdAt: string | Date;
   updatedAt: string | Date;
   owner?: OwnerResponseDto;

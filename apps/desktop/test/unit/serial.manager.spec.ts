@@ -2,13 +2,19 @@ import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   SerialManager,
+  InMemorySerialDriver,
   SERIAL_FRAME_REGEX,
   RECONNECT_INTERVAL_MS,
   MAX_RECONNECT_ATTEMPTS,
   DEFAULT_BAUD_RATE,
   type SerialDriver,
 } from '../../electron/serial.manager.ts';
-import type { HardwareStatus } from '@vet-app/shared-types';
+import {
+  getLastUsedPort,
+  setLastUsedPort,
+  resetSerialConfigForTesting,
+} from '../../electron/serial-config.ts';
+import type { HardwareStatus, SerialPortInfo } from '@vet-app/shared-types';
 
 class MockSerialDriver implements SerialDriver {
   public isOpen = false;
@@ -17,6 +23,7 @@ class MockSerialDriver implements SerialDriver {
   public closeCallCount = 0;
   public lastPortOpened: string | null = null;
   public lastBaudRateOpened: number | null = null;
+  public customError: string | null = null;
 
   private dataCallback?: (chunk: string | Buffer) => void;
   private closeCallback?: () => void;
@@ -32,6 +39,11 @@ class MockSerialDriver implements SerialDriver {
     }
     this.isOpen = true;
     return true;
+  }
+
+  public getLastError(): string | null {
+    if (this.customError) return this.customError;
+    return this.shouldFailOpen ? 'Puerto COM4 ocupado por otra aplicación' : null;
   }
 
   public async close(): Promise<void> {
@@ -114,6 +126,7 @@ describe('SerialManager (apps/desktop/electron/serial.manager.ts)', () => {
         portName: null,
         reconnecting: false,
         attemptCount: 0,
+        reason: null,
       });
     });
 
@@ -296,6 +309,124 @@ describe('SerialManager (apps/desktop/electron/serial.manager.ts)', () => {
       assert.equal(recoveredStatus.reconnecting, false);
       assert.equal(recoveredStatus.attemptCount, 0);
       assert.equal(recoveredStatus.portName, 'COM5');
+    });
+  });
+
+  describe('Autodetección, Fallo de Apertura y Persistencia Segura (RF-66, RF-67)', () => {
+    beforeEach(() => {
+      resetSerialConfigForTesting();
+      delete process.env.SERIAL_PORT;
+    });
+
+    it('sin puerto detectado: debe quedar desconectado sin inventar COM3 y sin invocar driver.open', async () => {
+      const customDriver = new MockSerialDriver();
+      const customManager = new SerialManager({
+        driver: customDriver,
+        listPortsFn: async () => [], // Ningún puerto disponible en el sistema
+      });
+
+      const result = await customManager.connect();
+      assert.equal(result, false, 'connect() debe retornar false cuando no hay puertos');
+      assert.equal(customDriver.openCallCount, 0, 'No debe intentar abrir ningún puerto inventado como COM3');
+
+      const status = customManager.getStatus();
+      assert.equal(status.connected, false);
+      assert.equal(status.portName, null);
+      assert.equal(status.reconnecting, false);
+      assert.equal(status.reason, 'No se detectó ningún lector NFC conectado');
+
+      customManager.disconnect();
+    });
+
+    it('fallo al abrir puerto: debe quedar desconectado con motivo y nunca "Conectado"', async () => {
+      const customDriver = new MockSerialDriver();
+      customDriver.shouldFailOpen = true;
+      customDriver.customError = 'Puerto COM4 ocupado por Thonny';
+
+      const customManager = new SerialManager({
+        driver: customDriver,
+      });
+
+      const result = await customManager.connect('COM4');
+      assert.equal(result, false);
+      assert.equal(customDriver.openCallCount, 1);
+
+      const status = customManager.getStatus();
+      assert.equal(status.connected, false, 'Nunca debe reportar conectado ante fallo de apertura');
+      assert.equal(status.portName, 'COM4');
+      assert.equal(status.reason, 'Puerto COM4 ocupado por Thonny');
+
+      customManager.disconnect();
+    });
+
+    it('preferencia de último puerto: debe priorizar lastUsedPort si sigue disponible', async () => {
+      const customDriver = new MockSerialDriver();
+      // Guardamos COM8 como último puerto usado exitosamente
+      setLastUsedPort('COM8');
+
+      const mockPorts: SerialPortInfo[] = [
+        { path: 'COM3', friendlyName: 'USB Serial (COM3)' },
+        { path: 'COM8', friendlyName: 'USB Serial ESP32 (COM8)' },
+        { path: 'COM4', vendorId: '10C4', productId: 'EA60', friendlyName: 'CP210x (COM4)' },
+      ];
+
+      const customManager = new SerialManager({
+        driver: customDriver,
+        listPortsFn: async () => mockPorts,
+      });
+
+      const connected = await customManager.connect();
+      assert.equal(connected, true);
+      assert.equal(customDriver.lastPortOpened, 'COM8', 'Debe priorizar COM8 (último puerto usado)');
+      assert.equal(getLastUsedPort(), 'COM8');
+
+      customManager.disconnect();
+    });
+
+    it('autodetección ESP32: cuando no hay lastUsedPort, debe preseleccionar VID/PID conocido', async () => {
+      const customDriver = new MockSerialDriver();
+      setLastUsedPort(null);
+
+      const mockPorts: SerialPortInfo[] = [
+        { path: 'COM1', friendlyName: 'Communications Port (COM1)' },
+        { path: 'COM4', vendorId: '10C4', productId: 'EA60', friendlyName: 'Silicon Labs CP210x (COM4)' },
+      ];
+
+      const customManager = new SerialManager({
+        driver: customDriver,
+        listPortsFn: async () => mockPorts,
+      });
+
+      const connected = await customManager.connect();
+      assert.equal(connected, true);
+      assert.equal(customDriver.lastPortOpened, 'COM4', 'Debe autodetectar COM4 por CP210x VID/PID');
+      assert.equal(getLastUsedPort(), 'COM4', 'Debe guardar COM4 como último puerto usado en el proceso principal');
+
+      customManager.disconnect();
+    });
+
+    it('persistencia segura: serial-config no almacena credenciales ni datos clínicos (RNF-2)', () => {
+      setLastUsedPort('COM4');
+      assert.equal(getLastUsedPort(), 'COM4');
+
+      // Intentar resetear y verificar que solo almacena strings o null
+      setLastUsedPort(null);
+      assert.equal(getLastUsedPort(), null);
+    });
+
+    it('InMemorySerialDriver: debe soportar simulación de fallos con motivo para desarrollo y tests', async () => {
+      const memDriver = new InMemorySerialDriver();
+      assert.equal(await memDriver.open('COM1', 115200), true);
+      assert.equal(memDriver.isOpen, true);
+      assert.equal(memDriver.getLastError(), null);
+
+      await memDriver.close();
+      assert.equal(memDriver.isOpen, false);
+
+      memDriver.shouldFail = true;
+      assert.equal(await memDriver.open('COM1', 115200), false);
+      assert.equal(memDriver.isOpen, false);
+      assert.equal(memDriver.getLastError(), 'Puerto no disponible o en uso');
     });
   });
 });

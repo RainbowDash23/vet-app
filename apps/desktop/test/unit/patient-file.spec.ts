@@ -67,6 +67,7 @@ describe('Ficha Clínica de Paciente Activada por Escaneo NFC (T33 / RF-21, RF-2
     reproductiveStatus: ReproductiveStatus.INTACT,
     notes: 'Alérgico al polen',
     ownerId: 'owner-456',
+    createdByClinicId: 'clinic-789',
     createdAt: '2022-01-01T00:00:00.000Z',
     updatedAt: '2023-01-01T00:00:00.000Z',
     owner: {
@@ -289,6 +290,36 @@ describe('Ficha Clínica de Paciente Activada por Escaneo NFC (T33 / RF-21, RF-2
       assert.equal(vacs.data.length, 1);
       assert.equal(vacs.data[0].vaccineName, 'Séxtuple Canina (DHPPiL)');
       assert.ok(calls[0].url.includes('/vaccinations/pet/pet-123'));
+    });
+
+    it('getTagsByPet(petId) debe llamar a GET /tags/pet/:petId (RF-61)', async () => {
+      const mockTags = [
+        {
+          id: 'tag-1',
+          uid: '04A1B2C3D4E5F6',
+          publicCode: 'PUB-1234-CODE',
+          status: TagStatus.ACTIVE,
+          petId: 'pet-123',
+          createdAt: '2026-03-01T00:00:00.000Z',
+          updatedAt: '2026-03-01T00:00:00.000Z',
+        },
+      ];
+
+      const { fn: mockFetch, calls } = createMockFetch(async (url) => {
+        if (url.includes('/tags/pet/pet-123')) {
+          return jsonResponse(mockTags);
+        }
+        return jsonResponse({ message: 'Not found' }, 404);
+      });
+
+      const apiClient = new ApiClient({ baseUrl: 'http://localhost:3000', fetchFn: mockFetch });
+      const service = new PetsService(apiClient);
+
+      const tags = await service.getTagsByPet('pet-123');
+
+      assert.equal(tags.length, 1);
+      assert.equal(tags[0].publicCode, 'PUB-1234-CODE');
+      assert.ok(calls[0].url.includes('/tags/pet/pet-123'));
     });
   });
 
@@ -543,6 +574,51 @@ describe('Ficha Clínica de Paciente Activada por Escaneo NFC (T33 / RF-21, RF-2
           `El archivo ${path.basename(filePath)} no debe contener clases de utilidad de Tailwind CSS`
         );
       }
+    });
+  });
+
+  describe('8. Visualización de Código Público y URL de Emergencia (RF-70, Problem D)', () => {
+    it('debe mostrar el código público, URL de emergencia y botón copiar cuando el usuario pertenece a la clínica de origen', () => {
+      const successData: ResolveTagSuccessDto = {
+        registered: true,
+        uid: '04A1B2C3D4E5F6',
+        publicCode: 'PUB-EMERGENCY-999',
+        pet: mockFullPet, // createdByClinicId === 'clinic-789'
+        hasFullAccess: true,
+      };
+
+      const html = renderToStaticMarkup(
+        React.createElement(PatientFileScreen, {
+          initialData: successData,
+          currentClinicId: 'clinic-789', // Misma clínica creadora
+          autoListenNfc: false,
+        })
+      );
+
+      assert.ok(html.includes('PUB-EMERGENCY-999'), 'Debe mostrar el código público');
+      assert.ok(html.includes('http://localhost:3000/p/PUB-EMERGENCY-999'), 'Debe mostrar la URL completa de emergencia');
+      assert.ok(html.includes('Copiar enlace'), 'Debe incluir botón para copiar enlace');
+    });
+
+    it('no debe mostrar el código público ni URL de emergencia si la clínica es diferente (cross-tenant)', () => {
+      const successData: ResolveTagSuccessDto = {
+        registered: true,
+        uid: '04A1B2C3D4E5F6',
+        pet: mockFullPet, // createdByClinicId === 'clinic-789'
+        hasFullAccess: true,
+      };
+
+      const html = renderToStaticMarkup(
+        React.createElement(PatientFileScreen, {
+          initialData: successData,
+          currentClinicId: 'other-clinic-uuid', // Clínica ajena
+          autoListenNfc: false,
+        })
+      );
+
+      assert.ok(!html.includes('emergencyCard'), 'No debe renderizar la tarjeta de emergencia');
+      assert.ok(!html.includes('PUB-EMERGENCY-999'), 'No debe exponer el código público cross-tenant');
+      assert.ok(!html.includes('Copiar enlace'), 'No debe exponer el botón de copiar enlace');
     });
   });
 });

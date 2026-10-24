@@ -220,3 +220,55 @@
   border: 1px solid var(--color-error, #ef4444);
   word-break: break-word;
 }
+
+.nfcStatusRow {
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.statusConnected {
+  color: var(--color-success, #16a34a);
+  font-weight: var(--font-weight-medium);
+}
+
+.statusDisconnected {
+  color: var(--color-text-secondary);
+  font-size: 11px;
+}
+
+.portActions {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.portRefreshButton {
+  font-size: var(--font-size-xs);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background-color: var(--color-bg-card);
+  color: var(--color-text-primary);
+  cursor: pointer;
+  font-weight: var(--font-weight-medium);
+  white-space: nowrap;
+}
+
+.portRefreshButton:hover:not(:disabled) {
+  background-color: var(--color-bg-hover, #f3f4f6);
+}
+
+.noPortsGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  background: var(--color-bg-app);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  border: 1px dashed var(--color-border);
+}
+
+.noPortsText {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  text-align: center;
+}

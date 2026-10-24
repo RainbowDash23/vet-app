@@ -74,6 +74,8 @@ export const HardwareStatusIndicator: React.FC<HardwareStatusIndicatorProps> = (
     statusClass = styles.reconnecting;
     dotClass = styles.dotReconnecting;
     ariaLabel = `Reintentando conexión con hardware serial, intento ${attemptCount} de 10`;
+  } else if (currentStatus.reason) {
+    ariaLabel = `Hardware serial desconectado: ${currentStatus.reason}`;
   }
 
   const rootClass = [styles.indicator, statusClass, className].filter(Boolean).join(' ');
@@ -96,7 +98,11 @@ export const HardwareStatusIndicator: React.FC<HardwareStatusIndicatorProps> = (
 
       {isDisconnected && (
         <span className={styles.label}>
-          {isBrowser ? 'Lector no disponible en navegador' : 'Hardware Desconectado'}
+          {isBrowser
+            ? 'Lector no disponible en navegador'
+            : currentStatus.reason
+            ? `Desconectado (${currentStatus.reason})`
+            : 'Hardware Desconectado'}
         </span>
       )}
 

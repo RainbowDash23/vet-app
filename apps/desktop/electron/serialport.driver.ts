@@ -191,15 +191,29 @@ export class SerialPortDriver implements SerialDriver {
   /**
    * Determina si un puerto reportado corresponde a un chip ESP32 (CP210x o CH340).
    */
-  public static isEsp32Device(port: { vendorId?: string; productId?: string }): boolean {
-    const vid = port.vendorId?.toUpperCase();
-    const pid = port.productId?.toUpperCase();
-    if (!vid || !pid) {
-      return false;
+  public static isEsp32Device(port: {
+    vendorId?: string;
+    productId?: string;
+    pnpId?: string;
+    friendlyName?: string;
+    manufacturer?: string;
+  }): boolean {
+    const vid = port.vendorId?.toUpperCase().replace(/^0X/, '');
+    const pid = port.productId?.toUpperCase().replace(/^0X/, '');
+    if (vid && pid) {
+      const matched = ESP32_VID_PID_PATTERNS.some(
+        (pattern) => pattern.vendorId === vid && pattern.productId === pid
+      );
+      if (matched) return true;
     }
-    return ESP32_VID_PID_PATTERNS.some(
-      (pattern) => pattern.vendorId === vid && pattern.productId === pid
-    );
+
+    if (port.pnpId) {
+      const upperPnp = port.pnpId.toUpperCase();
+      if (upperPnp.includes('VID_10C4') && upperPnp.includes('PID_EA60')) return true;
+      if (upperPnp.includes('VID_1A86') && upperPnp.includes('PID_7523')) return true;
+    }
+
+    return false;
   }
 
   /**

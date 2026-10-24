@@ -3,6 +3,7 @@ export interface HardwareStatus {
   portName?: string | null;
   reconnecting?: boolean;
   attemptCount?: number;
+  reason?: string | null;
 }
 
 export interface SerialPortInfo {
