@@ -58,6 +58,11 @@
   font-size: var(--font-size-sm);
 }
 
+.input option {
+  background-color: var(--color-bg-card, #151922);
+  color: var(--color-text-primary, #f4f4f5);
+}
+
 .input::placeholder {
   color: var(--color-text-muted);
 }

@@ -200,4 +200,152 @@ describe('UI Integration: PetRegisterScreen (RF-69, RF-30, RNF-3)', () => {
       ).toBeInTheDocument();
     });
   });
+
+  it('debe crear la mascota sin birthDate si el campo queda vacío (no envía string vacío)', async () => {
+    const user = userEvent.setup();
+
+    const mockOwnersService = {
+      getOwners: vi.fn().mockResolvedValue({
+        data: mockOwnersList,
+        total: 2,
+        page: 1,
+        limit: 100,
+        totalPages: 1,
+      }),
+    } as unknown as OwnersService;
+
+    const mockCreatePet = vi.fn().mockResolvedValue({
+      id: 'new-pet-no-birthdate',
+      name: 'Toby',
+      species: PetSpecies.CANINE,
+      ownerId: 'owner-uuid-1',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+
+    const mockPetsService = {
+      createPet: mockCreatePet,
+      assignTag: vi.fn(),
+    } as unknown as PetsService;
+
+    render(
+      <PetRegisterScreen
+        ownersServiceInstance={mockOwnersService}
+        petsServiceInstance={mockPetsService}
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/Carlos Mendoza \(C\.I\. 11111111\)/i)).toBeInTheDocument();
+    });
+
+    const nameInput = screen.getByPlaceholderText(/ej: max, luna/i);
+    await user.type(nameInput, 'Toby');
+
+    const submitBtn = screen.getByRole('button', { name: /guardar registro/i });
+    await user.click(submitBtn);
+
+    await waitFor(() => {
+      expect(mockCreatePet).toHaveBeenCalledTimes(1);
+      const callArg = mockCreatePet.mock.calls[0][0];
+      expect(callArg.name).toBe('Toby');
+      expect(callArg.ownerId).toBe('owner-uuid-1');
+      expect(callArg.birthDate).toBeUndefined();
+    });
+  });
+
+  it('debe crear la mascota con fecha de nacimiento ISO-8601 y bandera isApproximateBirthDate', async () => {
+    const user = userEvent.setup();
+
+    const mockOwnersService = {
+      getOwners: vi.fn().mockResolvedValue({
+        data: mockOwnersList,
+        total: 2,
+        page: 1,
+        limit: 100,
+        totalPages: 1,
+      }),
+    } as unknown as OwnersService;
+
+    const mockCreatePet = vi.fn().mockResolvedValue({
+      id: 'new-pet-with-birthdate',
+      name: 'Rocky',
+      species: PetSpecies.CANINE,
+      birthDate: '2023-01-15T00:00:00.000Z',
+      isApproximateBirthDate: true,
+      ownerId: 'owner-uuid-1',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+
+    const mockPetsService = {
+      createPet: mockCreatePet,
+      assignTag: vi.fn(),
+    } as unknown as PetsService;
+
+    render(
+      <PetRegisterScreen
+        ownersServiceInstance={mockOwnersService}
+        petsServiceInstance={mockPetsService}
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/Carlos Mendoza \(C\.I\. 11111111\)/i)).toBeInTheDocument();
+    });
+
+    const nameInput = screen.getByPlaceholderText(/ej: max, luna/i);
+    await user.type(nameInput, 'Rocky');
+
+    const birthDateInput = screen.getByLabelText(/fecha de nacimiento/i);
+    await user.type(birthDateInput, '2023-01-15');
+
+    const approxCheckbox = screen.getByRole('checkbox', { name: /fecha aproximada/i });
+    await user.click(approxCheckbox);
+
+    const submitBtn = screen.getByRole('button', { name: /guardar registro/i });
+    await user.click(submitBtn);
+
+    await waitFor(() => {
+      expect(mockCreatePet).toHaveBeenCalledTimes(1);
+      const callArg = mockCreatePet.mock.calls[0][0];
+      expect(callArg.name).toBe('Rocky');
+      expect(callArg.birthDate).toBeDefined();
+      expect(new Date(callArg.birthDate).getFullYear()).toBe(2023);
+      expect(callArg.isApproximateBirthDate).toBe(true);
+    });
+  });
+
+  it('debe mostrar el banner prioritario de dar de alta dueño y disparar onNavigateToOwnerRegister', async () => {
+    const user = userEvent.setup();
+    const mockNavigateToOwner = vi.fn();
+
+    const mockOwnersService = {
+      getOwners: vi.fn().mockResolvedValue({
+        data: mockOwnersList,
+        total: 2,
+        page: 1,
+        limit: 100,
+        totalPages: 1,
+      }),
+    } as unknown as OwnersService;
+
+    render(
+      <PetRegisterScreen
+        ownersServiceInstance={mockOwnersService}
+        onNavigateToOwnerRegister={mockNavigateToOwner}
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/Paso 1: Propietario de la Mascota/i)).toBeInTheDocument();
+    });
+
+    // Debe haber dos botones/links de dar de alta nuevo dueño (en el banner y sobre el select)
+    const ownerRegisterButtons = screen.getAllByRole('button', { name: /\+? ?Dar de alta nuevo dueño/i });
+    expect(ownerRegisterButtons.length).toBeGreaterThanOrEqual(1);
+
+    await user.click(ownerRegisterButtons[0]);
+    expect(mockNavigateToOwner).toHaveBeenCalledTimes(1);
+  });
 });

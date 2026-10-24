@@ -15,6 +15,9 @@ import {
   GenderIcon,
   PaletteIcon,
   RadioIcon,
+  CalendarIcon,
+  UserIcon,
+  PlusIcon,
 } from '../components/ui/icons';
 import { petsService as defaultPetsService, PetsService } from '../services/pets.service';
 import { ownersService as defaultOwnersService, OwnersService } from '../services/owners.service';
@@ -28,6 +31,8 @@ const petSchema = z.object({
   species: z.nativeEnum(PetSpecies, { errorMap: () => ({ message: 'Seleccione una especie válida' }) }),
   breed: z.string().optional().or(z.literal('')),
   sex: z.nativeEnum(PetSex).optional().default(PetSex.UNKNOWN),
+  birthDate: z.string().optional().or(z.literal('')),
+  isApproximateBirthDate: z.boolean().optional().default(false),
   color: z.string().optional().or(z.literal('')),
   ownerId: z.string().min(1, 'Debe seleccionar un propietario para la mascota'),
   nfcUid: z.string().optional().refine((val) => !val || val.length >= 8, {
@@ -76,6 +81,8 @@ export const PetRegisterScreen: React.FC<PetRegisterScreenProps> = ({
       species: PetSpecies.CANINE,
       breed: '',
       sex: PetSex.UNKNOWN,
+      birthDate: '',
+      isApproximateBirthDate: false,
       color: '',
       ownerId: initialOwnerId ?? '',
       nfcUid: initialNfcUid ?? '',
@@ -155,7 +162,17 @@ export const PetRegisterScreen: React.FC<PetRegisterScreenProps> = ({
 
     try {
       // 1. Crear la mascota con POST /pets (RF-17, RF-69)
-      const newPet = await petsServiceInstance.createPet({
+      const payload: {
+        name: string;
+        species: PetSpecies;
+        breed?: string | null;
+        sex?: PetSex;
+        color?: string | null;
+        ownerId: string;
+        reproductiveStatus?: ReproductiveStatus;
+        birthDate?: string;
+        isApproximateBirthDate?: boolean;
+      } = {
         name: data.name.trim(),
         species: data.species,
         breed: data.breed?.trim() || null,
@@ -163,7 +180,14 @@ export const PetRegisterScreen: React.FC<PetRegisterScreenProps> = ({
         color: data.color?.trim() || null,
         ownerId: data.ownerId,
         reproductiveStatus: ReproductiveStatus.INTACT,
-      });
+        isApproximateBirthDate: Boolean(data.isApproximateBirthDate),
+      };
+
+      if (data.birthDate && data.birthDate.trim() !== '') {
+        payload.birthDate = new Date(data.birthDate.trim()).toISOString();
+      }
+
+      const newPet = await petsServiceInstance.createPet(payload);
 
       // 2. Si se suministró un llavero NFC, asignarlo con POST /tags/assign (RF-30, RF-69)
       const cleanUid = data.nfcUid?.trim();
@@ -219,6 +243,8 @@ export const PetRegisterScreen: React.FC<PetRegisterScreenProps> = ({
       species: PetSpecies.CANINE,
       breed: '',
       sex: PetSex.UNKNOWN,
+      birthDate: '',
+      isApproximateBirthDate: false,
       color: '',
       ownerId: owners[0]?.id ?? '',
       nfcUid: '',
@@ -299,6 +325,29 @@ export const PetRegisterScreen: React.FC<PetRegisterScreenProps> = ({
             <p>{apiErrorMessage}</p>
           </div>
         )}
+
+        {/* Banner prioritario: Registrar nuevo dueño (Paso 1 del flujo clínico - RF-68, RF-69) */}
+        <div className={styles.ownerNoticeBox}>
+          <div className={styles.ownerNoticeContent}>
+            <UserIcon size={20} className={styles.ownerNoticeIcon} />
+            <div>
+              <strong className={styles.ownerNoticeTitle}>Paso 1: Propietario de la Mascota</strong>
+              <p className={styles.ownerNoticeText}>
+                Para registrar una mascota, el dueño debe estar registrado previamente en la clínica. Si aún no está dado de alta, regístralo primero.
+              </p>
+            </div>
+          </div>
+          {onNavigateToOwnerRegister && (
+            <button
+              type="button"
+              className={styles.registerOwnerBtn}
+              onClick={onNavigateToOwnerRegister}
+            >
+              <PlusIcon size={16} style={{ display: 'inline', verticalAlign: 'text-bottom', marginRight: '4px' }} />
+              Dar de alta nuevo dueño
+            </button>
+          )}
+        </div>
 
         <form onSubmit={handleSubmit(onSubmit)}>
           {/* Selector de propietario */}
@@ -386,6 +435,30 @@ export const PetRegisterScreen: React.FC<PetRegisterScreenProps> = ({
               placeholder="Ej: Dorado, Manchas negras"
               icon={<PaletteIcon size={16} />}
             />
+          </div>
+
+          <div className={styles.row}>
+            <FormField
+              control={control}
+              name="birthDate"
+              label="Fecha de nacimiento (opcional)"
+              type="date"
+              icon={<CalendarIcon size={16} />}
+            />
+
+            <div className={styles.checkboxGroup}>
+              <label className={styles.checkboxLabel}>
+                <input
+                  type="checkbox"
+                  className={styles.checkbox}
+                  {...control.register('isApproximateBirthDate')}
+                />
+                <span className={styles.checkboxText}>
+                  <strong>Fecha aproximada</strong>
+                  <span className={styles.checkboxSubtext}>Marca si la fecha es estimada o no exacta</span>
+                </span>
+              </label>
+            </div>
           </div>
 
           <FormField

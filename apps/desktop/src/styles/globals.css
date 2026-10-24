@@ -49,6 +49,16 @@ button {
   border: none;
 }
 
+select {
+  background-color: var(--color-bg-input, #1a1f2c);
+  color: var(--color-text-primary, #f4f4f5);
+}
+
+select option {
+  background-color: var(--color-bg-card, #151922);
+  color: var(--color-text-primary, #f4f4f5);
+}
+
 button:disabled,
 input:disabled,
 select:disabled,

@@ -18,7 +18,7 @@ export interface FormFieldProps<T extends FieldValues> {
   fieldType?: FormFieldType;
   label?: string;
   placeholder?: string;
-  type?: 'text' | 'email' | 'password' | 'number' | 'tel';
+  type?: 'text' | 'email' | 'password' | 'number' | 'tel' | 'date';
   icon?: ReactNode;
   disabled?: boolean;
   description?: string;
@@ -42,13 +42,19 @@ export function FormField<T extends FieldValues>({
   description,
   children,
 }: FormFieldProps<T>): React.ReactElement {
+  const fieldId = String(name);
+
   return (
     <Controller
       control={control}
       name={name}
       render={({ field, fieldState: { error } }) => (
         <div className={styles.fieldGroup}>
-          {label && <label className={styles.label}>{label}</label>}
+          {label && (
+            <label htmlFor={fieldId} className={styles.label}>
+              {label}
+            </label>
+          )}
 
           {/* Renderizado dinámico según el tipo de campo */}
           {fieldType === FormFieldType.INPUT && (
@@ -62,6 +68,7 @@ export function FormField<T extends FieldValues>({
               {icon && <span className={styles.icon}>{icon}</span>}
               <input
                 {...field}
+                id={fieldId}
                 value={field.value ?? ''}
                 type={type}
                 placeholder={placeholder}
@@ -82,6 +89,7 @@ export function FormField<T extends FieldValues>({
               {icon && <span className={styles.icon}>{icon}</span>}
               <select
                 {...field}
+                id={fieldId}
                 value={field.value ?? ''}
                 disabled={disabled}
                 className={styles.input}

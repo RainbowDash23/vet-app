@@ -16,6 +16,7 @@ import { PetsService, petsService as defaultPetsService, type VaccinationRecord 
 import { useNfcReader } from '../hooks/use-nfc-reader';
 import { useSafeDirtyGuard, type DirtyGuardState } from '../hooks/use-form-dirty-guard';
 import { Button } from '../components/ui';
+import { formatPetAge } from '../utils/pet-age';
 import {
   PetIcon,
   TagIcon,
@@ -519,11 +520,17 @@ export const PatientFileScreen: React.FC<PatientFileScreenProps> = ({
               <span className={styles.dataValue}>{fullPet.color}</span>
             </div>
           )}
+          <div className={styles.dataItem}>
+            <span className={styles.dataLabel}>Edad</span>
+            <span className={styles.dataValue}>
+              {formatPetAge(fullPet?.birthDate, fullPet?.isApproximateBirthDate)}
+            </span>
+          </div>
           {fullPet?.birthDate && (
             <div className={styles.dataItem}>
               <span className={styles.dataLabel}>Nacimiento</span>
               <span className={styles.dataValue}>
-                {new Date(fullPet.birthDate).toLocaleDateString()}
+                {new Date(fullPet.birthDate).toLocaleDateString()}{fullPet.isApproximateBirthDate ? ' (Aprox.)' : ''}
               </span>
             </div>
           )}

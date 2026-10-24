@@ -12,6 +12,7 @@ import {
 } from '../ui';
 import { TagIcon, CheckIcon, PlusIcon } from '../ui/icons';
 import { petsService as defaultPetsService, PetsService } from '../../services/pets.service';
+import { formatPetAge } from '../../utils/pet-age';
 import { ApiError } from '../../services/api.client';
 import styles from './tag-assignment-modal.module.css';
 
@@ -306,7 +307,7 @@ export const TagAssignmentModal: React.FC<TagAssignmentModalProps> = ({
                         </span>
                       </div>
                       <span className={styles.ownerInfo}>
-                        Dueño: {ownerName}
+                        Dueño: {ownerName} · {formatPetAge(pet.birthDate, pet.isApproximateBirthDate)}
                         {pet.owner?.phone ? ` · Tel: ${pet.owner.phone}` : ''}
                       </span>
                     </div>
