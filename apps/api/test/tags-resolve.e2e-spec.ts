@@ -200,4 +200,54 @@ describe('E2E: Subsistema de Tags NFC y Resolución de Consentimientos (tags-res
       );
     });
   });
+
+  describe('4. Flujo completo: Crear mascota sin birthDate, asignar tag y resolver (RF-17, RF-30, RF-28)', () => {
+    it('debe crear la mascota sin fecha de nacimiento, asignarle tag y resolverlo exitosamente con birthDate null', async () => {
+      // 1. Crear mascota sin birthDate con POST /pets
+      const createPetRes = await request(app.getHttpServer())
+        .post('/pets')
+        .set('Authorization', 'Bearer ' + receptionToken)
+        .send({
+          name: 'Nala',
+          species: 'FELINE',
+          breed: 'Criollo',
+          sex: 'FEMALE',
+          color: 'Blanco con manchas',
+          ownerId: OWNER_1_ID,
+        });
+
+      assert.strictEqual(createPetRes.status, 201);
+      const newPet = createPetRes.body;
+      assert.ok(newPet.id);
+      assert.strictEqual(newPet.name, 'Nala');
+      assert.strictEqual(newPet.birthDate, null);
+      assert.strictEqual(newPet.isApproximateBirthDate, false);
+
+      // 2. Asignar un tag físico nuevo con POST /tags/assign
+      const newUid = '04E1F2A3B4C5';
+      const assignRes = await request(app.getHttpServer())
+        .post('/tags/assign')
+        .set('Authorization', 'Bearer ' + receptionToken)
+        .send({
+          uid: newUid,
+          petId: newPet.id,
+        });
+
+      assert.strictEqual(assignRes.status, 201);
+      assert.strictEqual(assignRes.body.status, TagStatus.ACTIVE);
+      assert.strictEqual(assignRes.body.uid, newUid);
+
+      // 3. Resolver el tag con GET /tags/resolve/:uid desde Clínica B
+      const resolveRes = await request(app.getHttpServer())
+        .get('/tags/resolve/' + newUid)
+        .set('Authorization', 'Bearer ' + vetBToken);
+
+      assert.strictEqual(resolveRes.status, 200);
+      assert.strictEqual(resolveRes.body.registered, true);
+      assert.strictEqual(resolveRes.body.pet.id, newPet.id);
+      assert.strictEqual(resolveRes.body.pet.name, 'Nala');
+      assert.strictEqual(resolveRes.body.pet.birthDate, null);
+      assert.strictEqual(resolveRes.body.hasFullAccess, true);
+    });
+  });
 });

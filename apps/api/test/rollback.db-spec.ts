@@ -236,4 +236,36 @@ describe('E2E: Transaccionalidad Atómica y Reversión Total (Rollback) contra P
       );
     });
   });
+
+  describe('3. Persistencia de mascota sin birthDate en PostgreSQL real (RF-17)', () => {
+    it('debe almacenar birthDate como null en PostgreSQL cuando no se proporciona', async () => {
+      const petId = crypto.randomUUID();
+      const created = await prisma.pet.create({
+        data: {
+          id: petId,
+          name: 'Sombra',
+          species: 'FELINE',
+          breed: 'Bombay',
+          sex: 'MALE',
+          ownerId: OWNER_1_ID,
+          createdByClinicId: CLINIC_A_ID,
+          isApproximateBirthDate: false,
+        },
+      });
+
+      assert.strictEqual(created.birthDate, null);
+      assert.strictEqual(created.isApproximateBirthDate, false);
+
+      const fromDb = await prisma.pet.findUnique({
+        where: { id: petId },
+      });
+
+      assert.ok(fromDb);
+      assert.strictEqual(fromDb.birthDate, null);
+      assert.strictEqual(fromDb.isApproximateBirthDate, false);
+
+      // Limpieza
+      await prisma.pet.delete({ where: { id: petId } });
+    });
+  });
 });
