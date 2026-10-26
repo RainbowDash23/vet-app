@@ -138,10 +138,7 @@ describe('Layout Principal y Conectividad de Hardware Serial (T30 / RF-34 / RNF-
       // Ítems obligatorios de RECEPTION
       assert.ok(html.includes('Lista de Pacientes'), 'RECEPTION debe ver Lista de Pacientes');
       assert.ok(html.includes('Registro de Mascota'), 'RECEPTION debe ver Registro de Mascota');
-      assert.ok(
-        html.includes('Asignación de Tag') || html.includes('Búsqueda/Asignación de Tag'),
-        'RECEPTION debe ver Búsqueda/Asignación de Tag'
-      );
+      assert.ok(!html.includes('Búsqueda/Asignación de Tag'), 'RECEPTION no debe ver Búsqueda/Asignación de Tag');
       assert.ok(html.includes('Agenda de Visitas'), 'RECEPTION debe ver Agenda de Visitas');
 
       // Restricción: No debe ver vistas clínicas avanzadas de VET ni gestión exclusiva de ADMIN
@@ -204,7 +201,7 @@ describe('Layout Principal y Conectividad de Hardware Serial (T30 / RF-34 / RNF-
 
       // Comprobar que los botones tienen type="button" para accesibilidad con teclado
       const buttonMatches = html.match(/<button[^>]*type="button"[^>]*>/g) || [];
-      assert.ok(buttonMatches.length >= 4, 'Los enlaces de navegación deben ser botones con type="button"');
+      assert.ok(buttonMatches.length >= 3, 'Los enlaces de navegación deben ser botones con type="button"');
     });
   });
 

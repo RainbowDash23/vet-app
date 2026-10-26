@@ -32,6 +32,7 @@ export interface InMemoryDb {
   attachments: any[];
   vaccinations: any[];
   clinicOwners: any[];
+  clinicPatients: any[];
 }
 
 export const SEED_PASSWORDS = {
@@ -216,10 +217,13 @@ export async function createInitialDb(): Promise<InMemoryDb> {
     attachments: [],
     vaccinations: [],
     clinicOwners,
+    clinicPatients: [
+      { id: crypto.randomUUID(), clinicId: CLINIC_A_ID, petId: PET_1_ID, source: 'REGISTERED', addedAt: new Date() },
+    ],
   };
 }
 
-function matchCriteria(item: any, where: any): boolean {
+function matchCriteria(item: any, where: any, db?: InMemoryDb): boolean {
   if (!where) return true;
 
   for (const key of Object.keys(where)) {
@@ -232,6 +236,23 @@ function matchCriteria(item: any, where: any): boolean {
         return false;
       }
       continue;
+    }
+
+    if (key === 'clinicId_petId' && typeof condition === 'object' && condition !== null) {
+      if (item.clinicId !== condition.clinicId || item.petId !== condition.petId) {
+        return false;
+      }
+      continue;
+    }
+
+    if (key === 'clinicPatients' && typeof condition === 'object' && condition !== null && db?.clinicPatients) {
+      if (condition.some) {
+        const inRoster = db.clinicPatients.some(
+          (cp: any) => cp.petId === item.id && matchCriteria(cp, condition.some, db),
+        );
+        if (!inRoster) return false;
+        continue;
+      }
     }
 
     if (key === 'OR' && Array.isArray(condition)) {
@@ -469,17 +490,17 @@ export function createMockPrismaService(db: InMemoryDb): any {
   const createTableOps = (tableKey: keyof InMemoryDb, tableName: string) => ({
     findFirst: async (args: any = {}) => {
       const list = db[tableKey];
-      const match = list.find((item: any) => matchCriteria(item, args.where));
+      const match = list.find((item: any) => matchCriteria(item, args.where, db));
       return match ? enrichItem(match, tableName, args.include, args.select) : null;
     },
     findUnique: async (args: any = {}) => {
       const list = db[tableKey];
-      const match = list.find((item: any) => matchCriteria(item, args.where));
+      const match = list.find((item: any) => matchCriteria(item, args.where, db));
       return match ? enrichItem(match, tableName, args.include, args.select) : null;
     },
     findMany: async (args: any = {}) => {
       const list = db[tableKey];
-      const matches = list.filter((item: any) => matchCriteria(item, args.where));
+      const matches = list.filter((item: any) => matchCriteria(item, args.where, db));
       const sortedAndPaginated = applyOrderAndPagination(
         matches,
         args.orderBy,
@@ -492,7 +513,7 @@ export function createMockPrismaService(db: InMemoryDb): any {
     },
     count: async (args: any = {}) => {
       const list = db[tableKey];
-      const matches = list.filter((item: any) => matchCriteria(item, args.where));
+      const matches = list.filter((item: any) => matchCriteria(item, args.where, db));
       return matches.length;
     },
     create: async (args: any = {}) => {
@@ -510,7 +531,7 @@ export function createMockPrismaService(db: InMemoryDb): any {
     },
     update: async (args: any = {}) => {
       const list = db[tableKey];
-      const index = list.findIndex((item: any) => matchCriteria(item, args.where));
+      const index = list.findIndex((item: any) => matchCriteria(item, args.where, db));
       if (index === -1) {
         throw new Error(`Record to update not found in ${tableName}`);
       }
@@ -600,6 +621,7 @@ export function createMockPrismaService(db: InMemoryDb): any {
     attachment: createTableOps('attachments', 'attachments'),
     vaccination: createTableOps('vaccinations', 'vaccinations'),
     clinicOwner: createTableOps('clinicOwners', 'clinicOwners'),
+    clinicPatient: createTableOps('clinicPatients', 'clinicPatients'),
     $transaction: async (arg: any) => {
       if (typeof arg === 'function') {
         return await arg(mockPrisma);
@@ -626,6 +648,7 @@ export async function syncInMemoryDbToPostgres(prisma: any, db: InMemoryDb): Pro
   await prisma.accessGrant.deleteMany();
   await prisma.tag.deleteMany();
   await prisma.clinicOwner.deleteMany();
+  await prisma.clinicPatient.deleteMany();
   await prisma.pet.deleteMany();
   await prisma.owner.deleteMany();
   await prisma.refreshToken.deleteMany();
@@ -735,6 +758,21 @@ export async function syncInMemoryDbToPostgres(prisma: any, db: InMemoryDb): Pro
       update: {
         notes: p.notes,
       },
+    });
+  }
+
+  // 5b. Padrón ClinicPatient
+  for (const cp of db.clinicPatients) {
+    await prisma.clinicPatient.upsert({
+      where: { clinicId_petId: { clinicId: cp.clinicId, petId: cp.petId } },
+      create: {
+        id: cp.id || crypto.randomUUID(),
+        clinicId: cp.clinicId,
+        petId: cp.petId,
+        source: cp.source || 'REGISTERED',
+        addedAt: cp.addedAt || new Date(),
+      },
+      update: {},
     });
   }
 

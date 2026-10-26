@@ -5,7 +5,16 @@ import {
   Optional,
   UnauthorizedException,
 } from '@nestjs/common';
-import { GrantScope, Pet, PetSex, Prisma, ReproductiveStatus, TagStatus } from '@prisma/client';
+import {
+  AccessAction,
+  ClinicPatientSource,
+  GrantScope,
+  Pet,
+  PetSex,
+  Prisma,
+  ReproductiveStatus,
+  TagStatus,
+} from '@prisma/client';
 import { PaginatedResult } from '@vet-app/shared-types';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AccessGrantsService } from './access-grants.service';
@@ -28,6 +37,7 @@ export class PetsService {
    * Registra una nueva mascota vinculada a un dueño (RF-17, RF-60).
    * Verifica la existencia y estado activo del dueño asociado (RF-18).
    * Exige vínculo asistencial de la clínica con el dueño (creador o ClinicOwner) y registra provenance.
+   * Atómicamente incluye a la mascota en el padrón de la clínica registrante (ClinicPatient con source REGISTERED).
    */
   async create(createPetDto: CreatePetDto, clinicId: string, userId?: string): Promise<Pet> {
     if (!clinicId) {
@@ -56,27 +66,41 @@ export class PetsService {
       throw new NotFoundException('Dueño no encontrado o no vinculado a esta clínica');
     }
 
-    return this.prisma.pet.create({
-      data: {
-        name: createPetDto.name,
-        species: createPetDto.species,
-        breed: createPetDto.breed ?? null,
-        sex: createPetDto.sex ?? PetSex.UNKNOWN,
-        birthDate: createPetDto.birthDate ? new Date(createPetDto.birthDate) : null,
-        isApproximateBirthDate: createPetDto.isApproximateBirthDate ?? false,
-        color: createPetDto.color ?? null,
-        reproductiveStatus: createPetDto.reproductiveStatus ?? ReproductiveStatus.UNKNOWN,
-        notes: createPetDto.notes ?? null,
-        ownerId: createPetDto.ownerId,
-        createdByClinicId: clinicId,
-        createdById: userId ?? null,
-      },
+    return this.prisma.$transaction(async (tx) => {
+      const pet = await tx.pet.create({
+        data: {
+          name: createPetDto.name,
+          species: createPetDto.species,
+          breed: createPetDto.breed ?? null,
+          sex: createPetDto.sex ?? PetSex.UNKNOWN,
+          birthDate: createPetDto.birthDate ? new Date(createPetDto.birthDate) : null,
+          isApproximateBirthDate: createPetDto.isApproximateBirthDate ?? false,
+          color: createPetDto.color ?? null,
+          reproductiveStatus: createPetDto.reproductiveStatus ?? ReproductiveStatus.UNKNOWN,
+          notes: createPetDto.notes ?? null,
+          ownerId: createPetDto.ownerId,
+          createdByClinicId: clinicId,
+          createdById: userId ?? null,
+        },
+      });
+
+      await tx.clinicPatient.create({
+        data: {
+          clinicId,
+          petId: pet.id,
+          source: ClinicPatientSource.REGISTERED,
+          addedAt: new Date(),
+        },
+      });
+
+      return pet;
     });
   }
 
   /**
-   * Búsqueda y listado paginado estándar de mascotas activas (deletedAt: null).
-   * Permite filtrar por ownerId, species o término de búsqueda (query).
+   * Búsqueda y listado paginado estándar de mascotas activas del padrón de la clínica (RF-63).
+   * Filtrado estricto por clinicPatients de la clínica autenticada.
+   * Permite filtrar por ownerId, species o término de búsqueda (query en nombre, raza, dueño o documento).
    */
   async findAll(queryDto: SearchPetQueryDto, clinicId?: string): Promise<PaginatedResult<Pet>> {
     const page = queryDto.page && queryDto.page >= 1 ? queryDto.page : 1;
@@ -84,62 +108,15 @@ export class PetsService {
     const skip = (page - 1) * limit;
     const take = limit;
 
-    let candidatePetIds: string[] | null = null;
-    if (clinicId) {
-      const now = new Date();
-      const [originPets, clinicVisits, activeGrants] = await Promise.all([
-        this.prisma.pet.findMany({
-          where: { createdByClinicId: clinicId, deletedAt: null },
-          select: { id: true },
-        }),
-        this.prisma.visit?.findMany
-          ? this.prisma.visit.findMany({
-              where: { clinicId, deletedAt: null },
-              select: { petId: true },
-            })
-          : Promise.resolve([]),
-        this.prisma.accessGrant?.findMany
-          ? this.prisma.accessGrant.findMany({
-              where: {
-                clinicId,
-                revokedAt: null,
-                expiresAt: { gt: now },
-              },
-              select: { petId: true },
-            })
-          : Promise.resolve([]),
-      ]);
-
-      const allowedSet = new Set<string>([
-        ...originPets.map((p: any) => p.id),
-        ...clinicVisits.map((v: any) => v.petId),
-        ...activeGrants.map((g: any) => g.petId),
-      ]);
-
-      candidatePetIds = Array.from(allowedSet);
-
-      if (candidatePetIds.length === 0) {
-        return {
-          data: [],
-          meta: {
-            total: 0,
-            page,
-            limit,
-            totalPages: 0,
-            hasNextPage: false,
-            hasPrevPage: false,
-          },
-        };
-      }
-    }
-
     const where: Prisma.PetWhereInput = {
       deletedAt: null,
     };
 
-    if (candidatePetIds !== null) {
-      where.id = { in: candidatePetIds };
-    };
+    if (clinicId) {
+      where.clinicPatients = {
+        some: { clinicId },
+      };
+    }
 
     if (queryDto.ownerId) {
       where.ownerId = queryDto.ownerId;
@@ -154,6 +131,9 @@ export class PetsService {
       where.OR = [
         { name: { contains: q, mode: 'insensitive' } },
         { breed: { contains: q, mode: 'insensitive' } },
+        { owner: { name: { contains: q, mode: 'insensitive' } } },
+        { owner: { lastName: { contains: q, mode: 'insensitive' } } },
+        { owner: { documentId: { contains: q, mode: 'insensitive' } } },
       ];
     }
 
@@ -163,6 +143,13 @@ export class PetsService {
         where,
         skip,
         take,
+        include: {
+          owner: true,
+          tags: {
+            where: { deletedAt: null, status: TagStatus.ACTIVE },
+          },
+          clinicPatients: clinicId ? { where: { clinicId } } : undefined,
+        },
         orderBy: { createdAt: 'desc' },
       }),
     ]);
@@ -216,17 +203,97 @@ export class PetsService {
     let hasFullAccess = false;
     const isOriginClinic = pet.createdByClinicId === clinicId;
     const hasVisitsInClinic = pet.visits?.some((v: any) => v.clinicId === clinicId);
+    let activeGrant: any = null;
     if (isOriginClinic || hasVisitsInClinic) {
       hasFullAccess = true;
     } else if (this.accessGrantsService) {
-      hasFullAccess = await this.accessGrantsService.hasActiveGrant(
-        id,
-        clinicId,
-        GrantScope.FULL_HISTORY,
-      );
+      activeGrant = await this.accessGrantsService.getActiveGrant(id, clinicId);
+      hasFullAccess = !!activeGrant;
     }
 
-    return filterPetDataByConsent(pet, hasFullAccess);
+    const clinicPatient = await this.prisma.clinicPatient?.findUnique
+      ? await this.prisma.clinicPatient.findUnique({
+          where: { clinicId_petId: { clinicId, petId: id } },
+        })
+      : null;
+
+    const filtered = filterPetDataByConsent(pet, hasFullAccess);
+    filtered.isInRoster = !!clinicPatient;
+    if (activeGrant) {
+      filtered.activeGrant = {
+        id: activeGrant.id,
+        expiresAt: activeGrant.expiresAt,
+        scope: activeGrant.scope,
+      };
+    }
+
+    return filtered;
+  }
+
+  /**
+   * Agrega un paciente al listado de la clínica activa (roster) tras escaneo NFC (RF-63).
+   * Requiere un AccessGrant vigente o ser la clínica de origen.
+   * Es idempotente: si ya está en el padrón de la clínica, no duplica.
+   * Registra traza inmutable en AccessLog con la acción ROSTER_ADD.
+   */
+  async addToRoster(petId: string, clinicId: string, userId?: string): Promise<any> {
+    if (!clinicId) {
+      throw new UnauthorizedException('Identificador de clínica no disponible en la sesión');
+    }
+
+    const pet = await this.prisma.pet.findFirst({
+      where: { id: petId, deletedAt: null },
+    });
+
+    if (!pet) {
+      throw new NotFoundException('Mascota no encontrada o sin autorización de acceso');
+    }
+
+    const isOriginClinic = pet.createdByClinicId === clinicId;
+    let hasGrant = false;
+    if (this.accessGrantsService) {
+      hasGrant = await this.accessGrantsService.hasActiveGrant(petId, clinicId);
+    }
+
+    if (!isOriginClinic && !hasGrant) {
+      // No revelar si la mascota existe cuando no hay grant vigente (fail-closed)
+      throw new NotFoundException('Mascota no encontrada o sin autorización de acceso');
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const existing = await tx.clinicPatient.findUnique({
+        where: {
+          clinicId_petId: { clinicId, petId },
+        },
+      });
+
+      let rosterEntry = existing;
+      if (!rosterEntry) {
+        rosterEntry = await tx.clinicPatient.create({
+          data: {
+            clinicId,
+            petId,
+            source: isOriginClinic ? ClinicPatientSource.REGISTERED : ClinicPatientSource.ADDED_AFTER_SCAN,
+            addedAt: new Date(),
+          },
+        });
+      }
+
+      await tx.accessLog.create({
+        data: {
+          petId,
+          clinicId,
+          userId: userId ?? null,
+          action: AccessAction.ROSTER_ADD,
+        },
+      });
+
+      return {
+        success: true,
+        roster: rosterEntry,
+        message: 'Paciente agregado a la lista de su clínica exitosamente',
+      };
+    });
   }
 
   /**

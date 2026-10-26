@@ -5,6 +5,7 @@ import type {
   ResolveTagResponseDto,
   VisitResponseDto,
   TagResponseDto,
+  TagStatus,
 } from '@vet-app/shared-types';
 import { ApiClient, ApiError, apiClient as defaultApiClient } from './api.client';
 
@@ -149,6 +150,27 @@ export class PetsService {
     if (params?.limit) queryParams.set('limit', String(params.limit));
     const qs = queryParams.toString();
     return this.apiClient.get<PaginatedResult<PetResponseDto>>(`/pets${qs ? `?${qs}` : ''}`);
+  }
+
+  /**
+   * Agrega un paciente al listado (roster) de la clínica autenticada.
+   * Requiere pertenecer a la clínica de origen o contar con un AccessGrant activo.
+   */
+  public async addToRoster(petId: string): Promise<{ success: boolean; message: string }> {
+    const encodedPetId = encodeURIComponent(petId.trim());
+    return this.apiClient.post<{ success: boolean; message: string }>(`/pets/${encodedPetId}/roster`, {});
+  }
+
+  /**
+   * Actualiza el estado operativo de un tag NFC (RF-32, RF-63).
+   * Requiere rol RECEPTION o ADMIN en la clínica que atiende a la mascota.
+   */
+  public async reportTagStatus(
+    tagId: string,
+    dto: { status: TagStatus; reason?: string }
+  ): Promise<TagResponseDto> {
+    const encodedTagId = encodeURIComponent(tagId.trim());
+    return this.apiClient.patch<TagResponseDto>(`/tags/${encodedTagId}/status`, dto);
   }
 }
 

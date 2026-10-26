@@ -201,7 +201,9 @@ export class SerialManager extends EventEmitter implements ITagReader {
     let targetPort = portName ? portName.trim() : null;
 
     if (!targetPort) {
-      if (process.env.SERIAL_PORT) {
+      if (this.currentPort) {
+        targetPort = this.currentPort;
+      } else if (process.env.SERIAL_PORT) {
         targetPort = process.env.SERIAL_PORT.trim();
       } else {
         const availablePorts = await this.listPorts();

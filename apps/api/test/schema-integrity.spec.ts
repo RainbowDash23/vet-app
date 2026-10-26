@@ -150,4 +150,23 @@ describe('T04 - Integridad del Esquema Prisma, Modelos e Índices Parciales', ()
       }
     });
   });
+
+  describe('e) Modelo ClinicPatient y enum ClinicPatientSource (Padrón de Pacientes por Clínica)', () => {
+    it('debe existir el modelo ClinicPatient con unicidad clinicId+petId y relaciones', () => {
+      const cpModel = models.find((m) => m.name === 'ClinicPatient');
+      assert.ok(cpModel, 'El modelo ClinicPatient debe existir en el esquema Prisma');
+
+      const fieldNames = cpModel.fields.map((f) => f.name);
+      assert.ok(fieldNames.includes('clinicId'), 'ClinicPatient debe contener clinicId');
+      assert.ok(fieldNames.includes('petId'), 'ClinicPatient debe contener petId');
+      assert.ok(fieldNames.includes('source'), 'ClinicPatient debe contener source');
+      assert.ok(fieldNames.includes('addedAt'), 'ClinicPatient debe contener addedAt');
+
+      const sourceEnum = enums.find((e) => e.name === 'ClinicPatientSource');
+      assert.ok(sourceEnum, 'El enum ClinicPatientSource debe existir');
+      const sourceValues = sourceEnum.values.map((v) => v.name);
+      assert.ok(sourceValues.includes('REGISTERED'), 'ClinicPatientSource debe incluir REGISTERED');
+      assert.ok(sourceValues.includes('ADDED_AFTER_SCAN'), 'ClinicPatientSource debe incluir ADDED_AFTER_SCAN');
+    });
+  });
 });

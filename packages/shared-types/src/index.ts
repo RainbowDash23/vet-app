@@ -5,6 +5,7 @@ export * from './enums/tag-status.enum';
 export * from './enums/visit-status.enum';
 export * from './enums/access-action.enum';
 export * from './enums/grant.enum';
+export * from './enums/clinic-patient-source.enum';
 
 // DTOs
 export * from './dtos/auth.dto';

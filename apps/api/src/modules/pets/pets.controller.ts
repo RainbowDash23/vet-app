@@ -83,6 +83,25 @@ export class PetsController {
   }
 
   /**
+   * Agrega un paciente al listado de la clínica activa (roster) tras escaneo con AccessGrant vigente (RF-63).
+   * Restringido a usuarios autenticados con rol RECEPTION, VET o ADMIN.
+   */
+  @Post(':id/roster')
+  @HttpCode(HttpStatus.OK)
+  @Roles(Role.RECEPTION, Role.VET, Role.ADMIN)
+  async addToRoster(
+    @CurrentClinicId() clinicId: string,
+    @Param('id') id: string,
+    @Req() req?: Request & { user?: AuthenticatedUser & { id?: string; userId?: string; sub?: string } },
+  ) {
+    if (!clinicId) {
+      throw new UnauthorizedException('Identificador de clínica no disponible en la sesión');
+    }
+    const userId = req?.user?.id || req?.user?.userId || req?.user?.sub;
+    return this.petsService.addToRoster(id, clinicId, userId);
+  }
+
+  /**
    * Actualización de atributos de una mascota activa (RF-63).
    */
   @Patch(':id')

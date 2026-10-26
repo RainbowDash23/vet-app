@@ -67,9 +67,16 @@ describe('PetsService & PetsController (T13 / RF-17, RF-18, RF-19, RF-20)', () =
   let petsDb: MockPet[];
   let tagsDb: MockTag[];
   let visitsDb: MockVisit[];
+  let clinicPatientsDb: { id: string; clinicId: string; petId: string; source: string; addedAt: Date }[];
+  let accessLogsDb: any[];
   const validClinicId = 'clinic-uuid-1';
 
   beforeEach(() => {
+    clinicPatientsDb = [
+      { id: 'cp-1', clinicId: validClinicId, petId: 'pet-uuid-1', source: 'REGISTERED', addedAt: new Date() },
+      { id: 'cp-2', clinicId: validClinicId, petId: 'pet-uuid-2', source: 'REGISTERED', addedAt: new Date() },
+    ];
+    accessLogsDb = [];
     ownersDb = [
       {
         id: 'owner-uuid-1',
@@ -179,6 +186,48 @@ describe('PetsService & PetsController (T13 / RF-17, RF-18, RF-19, RF-20)', () =
     ];
 
     mockPrisma = {
+      clinicPatient: {
+        create: async ({ data }: any) => {
+          const entry = { id: `cp-${Date.now()}`, ...data, addedAt: data.addedAt || new Date() };
+          clinicPatientsDb.push(entry);
+          return entry;
+        },
+        findUnique: async ({ where }: any) => {
+          if (where.clinicId_petId) {
+            return (
+              clinicPatientsDb.find(
+                (cp) =>
+                  cp.clinicId === where.clinicId_petId.clinicId &&
+                  cp.petId === where.clinicId_petId.petId,
+              ) ?? null
+            );
+          }
+          return null;
+        },
+        findFirst: async ({ where }: any) => {
+          return (
+            clinicPatientsDb.find((cp) => {
+              if (where.clinicId && cp.clinicId !== where.clinicId) return false;
+              if (where.petId && cp.petId !== where.petId) return false;
+              return true;
+            }) ?? null
+          );
+        },
+        findMany: async ({ where }: any) => {
+          return clinicPatientsDb.filter((cp) => {
+            if (where?.clinicId && cp.clinicId !== where.clinicId) return false;
+            if (where?.petId && cp.petId !== where.petId) return false;
+            return true;
+          });
+        },
+      },
+      accessLog: {
+        create: async ({ data }: any) => {
+          const log = { id: `log-${Date.now()}`, ...data, timestamp: new Date() };
+          accessLogsDb.push(log);
+          return log;
+        },
+      },
       clinicOwner: {
         findFirst: async () => null,
         findMany: async () => [],
@@ -238,6 +287,12 @@ describe('PetsService & PetsController (T13 / RF-17, RF-18, RF-19, RF-20)', () =
             if (where.deletedAt === null && p.deletedAt !== null) return false;
             if (where.ownerId && p.ownerId !== where.ownerId) return false;
             if (where.species && p.species !== where.species) return false;
+            if (where.clinicPatients?.some) {
+              const inRoster = clinicPatientsDb.some(
+                (cp) => cp.clinicId === where.clinicPatients.some.clinicId && cp.petId === p.id,
+              );
+              if (!inRoster) return false;
+            }
             if (where.OR) {
               const matchesOr = where.OR.some((cond: any) => {
                 if (cond.name?.contains) {
@@ -259,6 +314,12 @@ describe('PetsService & PetsController (T13 / RF-17, RF-18, RF-19, RF-20)', () =
             if (where.deletedAt === null && p.deletedAt !== null) return false;
             if (where.ownerId && p.ownerId !== where.ownerId) return false;
             if (where.species && p.species !== where.species) return false;
+            if (where.clinicPatients?.some) {
+              const inRoster = clinicPatientsDb.some(
+                (cp) => cp.clinicId === where.clinicPatients.some.clinicId && cp.petId === p.id,
+              );
+              if (!inRoster) return false;
+            }
             if (where.OR) {
               const matchesOr = where.OR.some((cond: any) => {
                 if (cond.name?.contains) {
@@ -748,6 +809,59 @@ describe('PetsService & PetsController (T13 / RF-17, RF-18, RF-19, RF-20)', () =
       assert.strictEqual(errors.length, 0);
       assert.strictEqual((dto as SearchPetQueryDto).page, 2);
       assert.strictEqual((dto as SearchPetQueryDto).limit, 25);
+    });
+  });
+
+  describe('g) Padrón de Pacientes por Clínica (Roster) y POST /pets/:id/roster (RF-63)', () => {
+    it('debe agregar una mascota al padrón de la clínica cuando es la clínica de origen y auditar en AccessLog', async () => {
+      const result = await petsService.addToRoster('pet-uuid-1', validClinicId, 'user-admin-1');
+
+      assert.strictEqual(result.success, true);
+      assert.ok(result.roster);
+      assert.strictEqual(result.roster.petId, 'pet-uuid-1');
+      assert.strictEqual(result.roster.clinicId, validClinicId);
+
+      const log = accessLogsDb.find((l) => l.petId === 'pet-uuid-1' && l.action === 'ROSTER_ADD');
+      assert.ok(log, 'Debe registrar la acción ROSTER_ADD en AccessLog');
+    });
+
+    it('debe ser idempotente: no duplicar si la mascota ya está en el padrón', async () => {
+      // pet-uuid-1 ya está en clinicPatientsDb
+      const countBefore = clinicPatientsDb.filter((cp) => cp.clinicId === validClinicId).length;
+
+      const result = await petsService.addToRoster('pet-uuid-1', validClinicId);
+      assert.strictEqual(result.success, true);
+
+      const countAfter = clinicPatientsDb.filter((cp) => cp.clinicId === validClinicId).length;
+      assert.strictEqual(countAfter, countBefore, 'No debe duplicar entradas en el padrón');
+    });
+
+    it('debe rechazar con NotFoundException si una clínica ajena intenta agregarla sin AccessGrant vigente', async () => {
+      const foreignClinicId = 'clinic-uuid-foreign';
+      await assert.rejects(
+        async () => {
+          await petsService.addToRoster('pet-uuid-1', foreignClinicId);
+        },
+        (err: any) => {
+          assert.ok(err instanceof NotFoundException);
+          assert.strictEqual(
+            err.message,
+            'Mascota no encontrada o sin autorización de acceso',
+          );
+          return true;
+        },
+      );
+    });
+
+    it('findAll debe retornar únicamente los pacientes vinculados al padrón de la clínica', async () => {
+      const foreignClinicId = 'clinic-uuid-foreign';
+      const result = await petsService.findAll({}, foreignClinicId);
+
+      assert.strictEqual(result.data.length, 0);
+      assert.strictEqual(result.meta.total, 0);
+
+      const originResult = await petsService.findAll({}, validClinicId);
+      assert.ok(originResult.data.length >= 2);
     });
   });
 });

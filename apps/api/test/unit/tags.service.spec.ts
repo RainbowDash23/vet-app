@@ -792,6 +792,7 @@ describe('TagsService & TagsController (T16 / RF-28, RF-29, RF-30, RF-31, RF-32,
           pet: { id: samplePetId } as any,
           hasFullAccess: true,
           grant: { id: 'grant-mock' } as any,
+          isInRoster: false,
         };
       };
 

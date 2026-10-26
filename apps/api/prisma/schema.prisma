@@ -55,6 +55,12 @@ enum AccessAction {
   HISTORY_VIEW
   EMERGENCY_SCAN
   NFC_SCAN_DENIED
+  ROSTER_ADD
+}
+
+enum ClinicPatientSource {
+  REGISTERED
+  ADDED_AFTER_SCAN
 }
 
 enum GrantSource {
@@ -104,6 +110,7 @@ model Clinic {
   accessLogs   AccessLog[]
   vaccinations Vaccination[]
   clinicOwners ClinicOwner[]
+  clinicPatients ClinicPatient[]
 
   @@map("clinics")
 }
@@ -199,6 +206,7 @@ model Pet {
   attachments  Attachment[]
   accessLogs   AccessLog[]
   accessGrants AccessGrant[]
+  clinicPatients ClinicPatient[]
 
   @@index([ownerId])
   @@index([name])
@@ -224,6 +232,24 @@ model ClinicOwner {
   @@index([clinicId, status])
   @@index([ownerId, status])
   @@map("clinic_owners")
+}
+
+model ClinicPatient {
+  id        String              @id @default(uuid())
+  clinicId  String
+  petId     String
+  source    ClinicPatientSource @default(REGISTERED)
+  addedAt   DateTime            @default(now())
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  pet    Pet    @relation(fields: [petId], references: [id], onDelete: Cascade)
+
+  @@unique([clinicId, petId])
+  @@index([clinicId, addedAt])
+  @@index([petId])
+  @@map("clinic_patients")
 }
 
 model Tag {

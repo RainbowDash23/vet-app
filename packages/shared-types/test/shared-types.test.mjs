@@ -50,6 +50,7 @@ describe('T02: @vet-app/shared-types Data Contracts, DTOs and Shared Enums', () 
       'src/enums/visit-status.enum.ts',
       'src/enums/access-action.enum.ts',
       'src/enums/grant.enum.ts',
+      'src/enums/clinic-patient-source.enum.ts',
       'src/dtos/auth.dto.ts',
       'src/dtos/clinic.dto.ts',
       'src/dtos/user.dto.ts',
@@ -156,6 +157,12 @@ describe('T02: @vet-app/shared-types Data Contracts, DTOs and Shared Enums', () 
       assert.equal(exported.AccessAction.MANUAL_LOOKUP, 'MANUAL_LOOKUP');
       assert.equal(exported.AccessAction.HISTORY_VIEW, 'HISTORY_VIEW');
       assert.equal(exported.AccessAction.EMERGENCY_SCAN, 'EMERGENCY_SCAN');
+      assert.equal(exported.AccessAction.ROSTER_ADD, 'ROSTER_ADD');
+
+      // ClinicPatientSource
+      assert.ok(exported.ClinicPatientSource, 'ClinicPatientSource enum must be exported');
+      assert.equal(exported.ClinicPatientSource.REGISTERED, 'REGISTERED');
+      assert.equal(exported.ClinicPatientSource.ADDED_AFTER_SCAN, 'ADDED_AFTER_SCAN');
 
       // GrantSource & GrantType & GrantScope
       assert.ok(exported.GrantSource, 'GrantSource enum must be exported');

@@ -340,5 +340,24 @@ describe('5. Portal Público de Rescate SSR HTML (RF-64)', () => {
         );
       }
     });
+
+    it('debe contener el título exacto, etiquetas Open Graph sin datos personales y atributo lang="es"', async () => {
+      const res = await request(app.getHttpServer()).get(`/p/${TAG_1_PUBLIC_CODE}`);
+
+      assert.strictEqual(res.status, 200);
+      assert.ok(res.text.includes('<html lang="es">'), 'Debe incluir lang="es" en el tag html');
+      assert.ok(
+        res.text.includes('<title>Mascota registrada - contacto de emergencia</title>'),
+        'El título de la página debe ser exactamente "Mascota registrada - contacto de emergencia"',
+      );
+      assert.ok(
+        res.text.includes('<meta property="og:title" content="Mascota registrada - contacto de emergencia">'),
+        'Debe incluir meta og:title estándar',
+      );
+      assert.ok(
+        res.text.includes('<meta property="og:description" content="Portal público de contacto de emergencia para mascotas registradas.">'),
+        'Debe incluir meta og:description sin datos personales',
+      );
+    });
   });
 });

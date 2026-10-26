@@ -4,6 +4,7 @@ import {
   PetSpecies,
   PetSex,
   TagStatus,
+  Role,
 } from '@vet-app/shared-types';
 import type {
   PetResponseDto,
@@ -11,12 +12,22 @@ import type {
   ResolveTagSuccessDto,
   ResolveTagUnregisteredDto,
   VisitResponseDto,
+  TagResponseDto,
 } from '@vet-app/shared-types';
 
 import { PetsService, petsService as defaultPetsService, type VaccinationRecord } from '../services/pets.service';
 import { useNfcReader } from '../hooks/use-nfc-reader';
 import { useSafeDirtyGuard, type DirtyGuardState } from '../hooks/use-form-dirty-guard';
-import { Button } from '../components/ui';
+import {
+  Button,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  Input,
+} from '../components/ui';
 import { formatPetAge } from '../utils/pet-age';
 import {
   PetIcon,
@@ -47,6 +58,10 @@ export interface PatientFileScreenProps {
    * ID de la clínica en sesión activa (para control de acceso a datos de emergencia).
    */
   currentClinicId?: string;
+  /**
+   * Rol del usuario autenticado en sesión (para desplegar información técnica a ADMIN).
+   */
+  currentUserRole?: Role | 'ADMIN' | 'VET' | 'RECEPTION';
   /**
    * Callback invocado cuando se escanea un tag no registrado en el sistema (RF-29).
    */
@@ -99,6 +114,7 @@ export const PatientFileScreen: React.FC<PatientFileScreenProps> = ({
   uid,
   petId,
   currentClinicId,
+  currentUserRole,
   onUnregisteredTag,
   onBack,
   petsService = defaultPetsService,
@@ -131,13 +147,37 @@ export const PatientFileScreen: React.FC<PatientFileScreenProps> = ({
   const [publicCode, setPublicCode] = useState<string | null>(initialData?.publicCode || null);
   const [copiedLink, setCopiedLink] = useState<boolean>(false);
 
+  // Estados de lista de pacientes (roster), tags y modal de vinculación
+  const [petTags, setPetTags] = useState<TagResponseDto[]>([]);
+  const [showTagModal, setShowTagModal] = useState<boolean>(false);
+  const [tagModalUid, setTagModalUid] = useState<string>('');
+  const [isSubmittingTag, setIsSubmittingTag] = useState<boolean>(false);
+  const [tagModalError, setTagModalError] = useState<string | null>(null);
+
+  const [isInRoster, setIsInRoster] = useState<boolean>(
+    Boolean(initialData?.isInRoster || (initialData?.pet as PetResponseDto)?.isInRoster)
+  );
+  const [isAddingToRoster, setIsAddingToRoster] = useState<boolean>(false);
+  const [rosterSuccessMessage, setRosterSuccessMessage] = useState<string | null>(null);
+
   const authContext = useContext(AuthContext);
   const effectiveClinicId = currentClinicId ?? authContext?.clinicId ?? authContext?.user?.clinicId;
+  const effectiveRole: string | undefined = currentUserRole ?? authContext?.role ?? authContext?.user?.role;
+  const isAdmin = effectiveRole === 'ADMIN' || effectiveRole === Role.ADMIN;
+  const isReception = effectiveRole === 'RECEPTION' || effectiveRole === Role.RECEPTION;
   const resolvedPet = data?.pet as PetResponseDto | undefined;
   const petOriginClinicId = resolvedPet?.createdByClinicId;
   const isOriginClinic = Boolean(
     effectiveClinicId && petOriginClinicId && effectiveClinicId === petOriginClinicId
   );
+  const canManageTags = Boolean(isOriginClinic && (isAdmin || isReception));
+
+  useEffect(() => {
+    if (data) {
+      const inRoster = Boolean(data.isInRoster || (data.pet as PetResponseDto)?.isInRoster);
+      setIsInRoster(inRoster);
+    }
+  }, [data]);
 
   useEffect(() => {
     let isMounted = true;
@@ -151,6 +191,7 @@ export const PatientFileScreen: React.FC<PatientFileScreenProps> = ({
         .getTagsByPet(targetPetId)
         .then((tagsList) => {
           if (isMounted && tagsList && tagsList.length > 0) {
+            setPetTags(tagsList);
             const activeTag = tagsList.find((t) => t.status === 'ACTIVE') || tagsList[0];
             if (activeTag?.publicCode) {
               setPublicCode(activeTag.publicCode);
@@ -183,6 +224,58 @@ export const PatientFileScreen: React.FC<PatientFileScreenProps> = ({
       setTimeout(() => setCopiedLink(false), 2000);
     } catch {
       // Fallback
+    }
+  };
+
+  const activeTag = petTags.find((t) => t.status === TagStatus.ACTIVE);
+
+  const handleTagSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanUid = tagModalUid.trim();
+    if (!cleanUid) {
+      setTagModalError('El UID del tag es obligatorio');
+      return;
+    }
+    const targetPetId = (data?.pet as PetResponseDto)?.id || petId;
+    if (!targetPetId) return;
+
+    setIsSubmittingTag(true);
+    setTagModalError(null);
+    try {
+      if (activeTag) {
+        await petsService.reportTagStatus(activeTag.id, {
+          status: TagStatus.INACTIVE,
+          reason: 'Reemplazo de llavero',
+        });
+      }
+      await petsService.assignTag({ uid: cleanUid, petId: targetPetId });
+      setShowTagModal(false);
+      setTagModalUid('');
+      if (targetPetId) {
+        await loadByPetId(targetPetId);
+      }
+    } catch (err: unknown) {
+      setTagModalError(err instanceof Error ? err.message : 'Error al vincular el llavero NFC');
+    } finally {
+      setIsSubmittingTag(false);
+    }
+  };
+
+  const handleAddToRoster = async () => {
+    const targetPetId = (data?.pet as PetResponseDto)?.id || petId;
+    if (!targetPetId) return;
+    setIsAddingToRoster(true);
+    setErrorMessage(null);
+    try {
+      await petsService.addToRoster(targetPetId);
+      setIsInRoster(true);
+      setRosterSuccessMessage('Paciente añadido exitosamente al listado de su clínica');
+    } catch (err: unknown) {
+      setErrorMessage(
+        err instanceof Error ? err.message : 'Error al agregar el paciente a la lista de la clínica'
+      );
+    } finally {
+      setIsAddingToRoster(false);
     }
   };
 
@@ -500,6 +593,14 @@ export const PatientFileScreen: React.FC<PatientFileScreenProps> = ({
       v.heartRate !== undefined
   );
 
+  const grantExpiresAt =
+    data.grant?.expiresAt ||
+    data.activeGrant?.expiresAt ||
+    (data.pet as PetResponseDto)?.activeGrant?.expiresAt;
+  const grantHoursRemaining = grantExpiresAt
+    ? Math.max(0, Math.ceil((new Date(grantExpiresAt).getTime() - Date.now()) / (1000 * 60 * 60)))
+    : null;
+
   return (
     <div className={styles.container} role="main">
       {/* Barra de Acciones y Latencia */}
@@ -560,8 +661,42 @@ export const PatientFileScreen: React.FC<PatientFileScreenProps> = ({
                 Consentimiento Restringido (RF-21)
               </span>
             )}
+            {grantHoursRemaining !== null && (
+              <span className={styles.grantTimeBadge} data-testid="grant-time-badge">
+                <TimerIcon size={14} style={{ display: 'inline', verticalAlign: 'text-bottom', marginRight: '4px' }} />
+                Vence en {grantHoursRemaining} h
+              </span>
+            )}
+            {isInRoster ? (
+              <span className={styles.rosterBadge} data-testid="roster-badge">
+                <CheckIcon size={14} style={{ display: 'inline', verticalAlign: 'text-bottom', marginRight: '4px' }} />
+                Paciente de su clínica
+              </span>
+            ) : (
+              <span className={styles.nonRosterBadge} data-testid="non-roster-badge">
+                Paciente externo
+              </span>
+            )}
           </div>
         </div>
+
+        {/* Acción para agregar a pacientes de la clínica cuando se accede por escaneo ajeno */}
+        {!isInRoster && isFullAccess && !isOriginClinic && (
+          <div className={styles.rosterActionWrapper}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleAddToRoster}
+              disabled={isAddingToRoster}
+              data-testid="add-to-roster-button"
+            >
+              {isAddingToRoster ? 'Agregando...' : 'Agregar a mis pacientes'}
+            </Button>
+            {rosterSuccessMessage && (
+              <span className={styles.rosterSuccessText}>{rosterSuccessMessage}</span>
+            )}
+          </div>
+        )}
 
         {/* Grilla de Datos de Filiación */}
         <div className={styles.filiationGrid}>
@@ -575,7 +710,19 @@ export const PatientFileScreen: React.FC<PatientFileScreenProps> = ({
           </div>
           <div className={styles.dataItem}>
             <span className={styles.dataLabel}>Estado del Tag</span>
-            <span className={styles.dataValue}>{tagStatus}</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+              <span className={styles.dataValue}>{tagStatus}</span>
+              {canManageTags && (
+                <button
+                  type="button"
+                  className={styles.tagActionLink}
+                  onClick={() => setShowTagModal(true)}
+                  data-testid="tag-manage-button"
+                >
+                  {activeTag ? 'Reemplazar llavero' : 'Asignar llavero'}
+                </button>
+              )}
+            </div>
           </div>
           {fullPet?.color && (
             <div className={styles.dataItem}>
@@ -599,36 +746,39 @@ export const PatientFileScreen: React.FC<PatientFileScreenProps> = ({
           )}
         </div>
 
-        {/* Sección de Emergencia y Código Público del Llavero (RF-70, Problem D) */}
-        {isOriginClinic && publicCode && (
-          <div className={styles.emergencyCard} data-testid="emergency-tag-card">
-            <div className={styles.emergencyCardHeader}>
-              <span className={styles.emergencyCardTitle}>Identificador Público y Enlace de Emergencia</span>
-              <span className={styles.emergencyBadge}>Llavero Activo</span>
-            </div>
-            <p className={styles.emergencyDescription}>
-              Enlace de rescate público accesible mediante QR o navegador en caso de extravío.
-              Solo muestra datos de contacto de emergencia, protegiendo el historial médico.
-            </p>
-            <div className={styles.emergencyRow}>
-              <div className={styles.emergencyField}>
-                <span className={styles.emergencyLabel}>Código Público:</span>
-                <code className={styles.emergencyCode}>{publicCode}</code>
+        {/* Sección de Emergencia y Código Público del Llavero (Visible solo para ADMIN, plegado en Información técnica) */}
+        {isAdmin && isOriginClinic && publicCode && (
+          <details className={styles.technicalDetails} data-testid="technical-info-details">
+            <summary className={styles.technicalSummary}>Información técnica</summary>
+            <div className={styles.emergencyCard} data-testid="emergency-tag-card">
+              <div className={styles.emergencyCardHeader}>
+                <span className={styles.emergencyCardTitle}>Identificador Público y Enlace de Emergencia</span>
+                <span className={styles.emergencyBadge}>Llavero Activo</span>
               </div>
-              <div className={styles.emergencyField}>
-                <span className={styles.emergencyLabel}>URL de Emergencia:</span>
-                <span className={styles.emergencyUrl}>{emergencyUrl}</span>
+              <p className={styles.emergencyDescription}>
+                Enlace de rescate público accesible mediante QR o navegador en caso de extravío.
+                Solo muestra datos de contacto de emergencia, protegiendo el historial médico.
+              </p>
+              <div className={styles.emergencyRow}>
+                <div className={styles.emergencyField}>
+                  <span className={styles.emergencyLabel}>Código Público:</span>
+                  <code className={styles.emergencyCode}>{publicCode}</code>
+                </div>
+                <div className={styles.emergencyField}>
+                  <span className={styles.emergencyLabel}>URL de Emergencia:</span>
+                  <span className={styles.emergencyUrl}>{emergencyUrl}</span>
+                </div>
+                <button
+                  type="button"
+                  className={styles.copyButton}
+                  onClick={handleCopyEmergencyLink}
+                  aria-label="Copiar enlace de emergencia"
+                >
+                  {copiedLink ? '¡Copiado!' : 'Copiar enlace'}
+                </button>
               </div>
-              <button
-                type="button"
-                className={styles.copyButton}
-                onClick={handleCopyEmergencyLink}
-                aria-label="Copiar enlace de emergencia"
-              >
-                {copiedLink ? '¡Copiado!' : 'Copiar enlace'}
-              </button>
             </div>
-          </div>
+          </details>
         )}
       </section>
 
@@ -925,6 +1075,59 @@ export const PatientFileScreen: React.FC<PatientFileScreenProps> = ({
           )}
         </div>
       )}
+
+      {/* Modal para Asignación / Reemplazo de Llavero NFC */}
+      <Dialog open={showTagModal} onOpenChange={(open) => !open && setShowTagModal(false)}>
+        <DialogContent aria-describedby="tag-modal-desc">
+          <DialogHeader>
+            <DialogTitle>{activeTag ? 'Reemplazar Llavero NFC' : 'Asignar Llavero NFC'}</DialogTitle>
+            <DialogDescription id="tag-modal-desc">
+              {activeTag
+                ? `El paciente actualmente tiene activo el tag con UID "${activeTag.uid}". Al asignar uno nuevo, el tag anterior quedará inactivo conservando su historial.`
+                : 'Vincule un nuevo transpondedor físico al paciente para habilitar la identificación rápida por aproximación.'}
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleTagSubmit}>
+            <div style={{ margin: 'var(--space-4) 0' }}>
+              <label
+                htmlFor="new-tag-uid"
+                style={{
+                  display: 'block',
+                  marginBottom: 'var(--space-2)',
+                  fontSize: 'var(--font-size-sm)',
+                  fontWeight: 'var(--font-weight-medium)',
+                }}
+              >
+                UID del Llavero (Hexadecimal)
+              </label>
+              <Input
+                id="new-tag-uid"
+                type="text"
+                placeholder="Ej: 04A1B2C3D4E5"
+                value={tagModalUid}
+                onChange={(e) => {
+                  setTagModalUid(e.target.value.toUpperCase());
+                  setTagModalError(null);
+                }}
+                autoFocus
+              />
+              {tagModalError && (
+                <div role="alert" style={{ color: 'var(--color-danger)', fontSize: 'var(--font-size-xs)', marginTop: 'var(--space-2)' }}>
+                  {tagModalError}
+                </div>
+              )}
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setShowTagModal(false)} disabled={isSubmittingTag}>
+                Cancelar
+              </Button>
+              <Button type="submit" variant="primary" disabled={isSubmittingTag || !tagModalUid.trim()}>
+                {isSubmittingTag ? 'Guardando...' : activeTag ? 'Confirmar Reemplazo' : 'Asignar Llavero'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

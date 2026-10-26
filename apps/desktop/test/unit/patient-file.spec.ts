@@ -11,6 +11,7 @@ import {
   ReproductiveStatus,
   TagStatus,
   VisitStatus,
+  Role,
 } from '@vet-app/shared-types';
 import type {
   PetResponseDto,
@@ -577,8 +578,8 @@ describe('Ficha Clínica de Paciente Activada por Escaneo NFC (T33 / RF-21, RF-2
     });
   });
 
-  describe('8. Visualización de Código Público y URL de Emergencia (RF-70, Problem D)', () => {
-    it('debe mostrar el código público, URL de emergencia y botón copiar cuando el usuario pertenece a la clínica de origen', () => {
+  describe('8. Visualización de Código Público, Información Técnica y Roster (SPEC EARS)', () => {
+    it('debe mostrar el código público dentro de Información técnica plegada cuando el usuario es ADMIN de la clínica de origen', () => {
       const successData: ResolveTagSuccessDto = {
         registered: true,
         uid: '04A1B2C3D4E5F6',
@@ -591,13 +592,37 @@ describe('Ficha Clínica de Paciente Activada por Escaneo NFC (T33 / RF-21, RF-2
         React.createElement(PatientFileScreen, {
           initialData: successData,
           currentClinicId: 'clinic-789', // Misma clínica creadora
+          currentUserRole: Role.ADMIN,
           autoListenNfc: false,
         })
       );
 
+      assert.ok(html.includes('Información técnica'), 'Debe incluir bloque plegado Información técnica');
       assert.ok(html.includes('PUB-EMERGENCY-999'), 'Debe mostrar el código público');
       assert.ok(html.includes('http://localhost:3000/p/PUB-EMERGENCY-999'), 'Debe mostrar la URL completa de emergencia');
       assert.ok(html.includes('Copiar enlace'), 'Debe incluir botón para copiar enlace');
+    });
+
+    it('no debe mostrar el bloque de información técnica si el usuario no es ADMIN', () => {
+      const successData: ResolveTagSuccessDto = {
+        registered: true,
+        uid: '04A1B2C3D4E5F6',
+        publicCode: 'PUB-EMERGENCY-999',
+        pet: mockFullPet,
+        hasFullAccess: true,
+      };
+
+      const html = renderToStaticMarkup(
+        React.createElement(PatientFileScreen, {
+          initialData: successData,
+          currentClinicId: 'clinic-789',
+          currentUserRole: Role.VET, // Rol VET no es ADMIN
+          autoListenNfc: false,
+        })
+      );
+
+      assert.ok(!html.includes('Información técnica'), 'No debe mostrar bloque de información técnica a no ADMIN');
+      assert.ok(!html.includes('PUB-EMERGENCY-999'), 'No debe mostrar código público a no ADMIN');
     });
 
     it('no debe mostrar el código público ni URL de emergencia si la clínica es diferente (cross-tenant)', () => {
@@ -612,6 +637,7 @@ describe('Ficha Clínica de Paciente Activada por Escaneo NFC (T33 / RF-21, RF-2
         React.createElement(PatientFileScreen, {
           initialData: successData,
           currentClinicId: 'other-clinic-uuid', // Clínica ajena
+          currentUserRole: Role.ADMIN,
           autoListenNfc: false,
         })
       );
@@ -619,6 +645,72 @@ describe('Ficha Clínica de Paciente Activada por Escaneo NFC (T33 / RF-21, RF-2
       assert.ok(!html.includes('emergencyCard'), 'No debe renderizar la tarjeta de emergencia');
       assert.ok(!html.includes('PUB-EMERGENCY-999'), 'No debe exponer el código público cross-tenant');
       assert.ok(!html.includes('Copiar enlace'), 'No debe exponer el botón de copiar enlace');
+    });
+
+    it('debe indicar el tiempo restante del AccessGrant cuando el acceso es por escaneo temporal', () => {
+      const expiresAt = new Date(Date.now() + 14 * 60 * 60 * 1000).toISOString(); // 14 horas restantes
+      const successData: ResolveTagSuccessDto = {
+        registered: true,
+        uid: '04A1B2C3D4E5F6',
+        pet: mockFullPet,
+        hasFullAccess: true,
+        activeGrant: {
+          id: 'grant-123',
+          expiresAt,
+        },
+      };
+
+      const html = renderToStaticMarkup(
+        React.createElement(PatientFileScreen, {
+          initialData: successData,
+          currentClinicId: 'other-clinic-uuid',
+          autoListenNfc: false,
+        })
+      );
+
+      assert.ok(html.includes('Vence en 14 h'), 'Debe mostrar el tiempo restante de acceso');
+    });
+
+    it('debe indicar si el paciente pertenece o no a la clínica actual y mostrar botón agregar a mis pacientes en clínica ajena', () => {
+      const successData: ResolveTagSuccessDto = {
+        registered: true,
+        uid: '04A1B2C3D4E5F6',
+        pet: mockFullPet, // createdByClinicId: 'clinic-789'
+        hasFullAccess: true,
+        isInRoster: false,
+      };
+
+      const html = renderToStaticMarkup(
+        React.createElement(PatientFileScreen, {
+          initialData: successData,
+          currentClinicId: 'other-clinic-uuid',
+          autoListenNfc: false,
+        })
+      );
+
+      assert.ok(html.includes('Paciente externo'), 'Debe indicar que es paciente externo');
+      assert.ok(html.includes('Agregar a mis pacientes'), 'Debe mostrar botón para agregar a mis pacientes');
+    });
+
+    it('debe mostrar el badge de paciente de su clínica cuando isInRoster es true', () => {
+      const successData: ResolveTagSuccessDto = {
+        registered: true,
+        uid: '04A1B2C3D4E5F6',
+        pet: mockFullPet,
+        hasFullAccess: true,
+        isInRoster: true,
+      };
+
+      const html = renderToStaticMarkup(
+        React.createElement(PatientFileScreen, {
+          initialData: successData,
+          currentClinicId: 'clinic-789',
+          autoListenNfc: false,
+        })
+      );
+
+      assert.ok(html.includes('Paciente de su clínica'), 'Debe mostrar badge Paciente de su clínica');
+      assert.ok(!html.includes('Agregar a mis pacientes'), 'No debe mostrar botón de agregar si ya pertenece a la clínica');
     });
   });
 });

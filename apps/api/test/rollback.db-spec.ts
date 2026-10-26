@@ -3,6 +3,7 @@ import * as assert from 'node:assert';
 import * as crypto from 'node:crypto';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
+import * as bcrypt from 'bcryptjs';
 import { INestApplication } from '@nestjs/common';
 import { AccessAction, GrantScope, GrantSource, Role, TagStatus } from '@prisma/client';
 import { PrismaService } from '../src/prisma/prisma.service';
@@ -16,6 +17,7 @@ import {
   PET_1_ID,
   OWNER_1_ID,
   TAG_1_UID,
+  SEED_PASSWORDS,
   request,
 } from './e2e-helper';
 
@@ -355,6 +357,221 @@ describe('E2E: Transaccionalidad Atómica y Reversión Total (Rollback) contra P
       await prisma.tag.deleteMany({ where: { petId: pet.id } });
       await prisma.pet.delete({ where: { id: pet.id } });
       await prisma.owner.delete({ where: { id: owner.id } });
+    });
+  });
+
+  describe('5. Flujo Completo de Roster por Clínica, Auto-asignación y Aislamiento Multi-Tenant (SPEC EARS)', () => {
+    it('debe registrar en Clínica A, auto-asignar a su roster, escanear desde B, agregar a B, verificar aislamiento y rechazar a C sin grant', async () => {
+      // 1. Obtener tokens de autenticación para Clínica A y Clínica B
+      const loginARes = await request(app.getHttpServer()).post('/auth/login').send({
+        email: 'reception@vetapp.com',
+        password: SEED_PASSWORDS.reception,
+      });
+      assert.strictEqual(loginARes.status, 200, 'Login en Clínica A debe ser 200');
+      const tokenA = loginARes.body.accessToken;
+
+      const loginBRes = await request(app.getHttpServer()).post('/auth/login').send({
+        email: 'vet2@vetapp.com',
+        password: SEED_PASSWORDS.vetB,
+      });
+      assert.strictEqual(loginBRes.status, 200, 'Login en Clínica B debe ser 200');
+      const tokenB = loginBRes.body.accessToken;
+
+      // 2. Crear una tercera clínica (Clínica C) en PostgreSQL real y su usuario
+      const clinicCId = crypto.randomUUID();
+      const clinicC = await prisma.clinic.create({
+        data: {
+          id: clinicCId,
+          name: 'Clínica Veterinaria Las Palmas',
+          code: 'CLINIC-C-' + Date.now().toString().slice(-4),
+          email: 'palmas.' + Date.now() + '@example.com',
+          phone: '+1234567899',
+          address: 'Calle Palma 789',
+        },
+      });
+
+      const userC = await prisma.user.create({
+        data: {
+          id: crypto.randomUUID(),
+          email: 'vetc.' + Date.now() + '@example.com',
+          password: await bcrypt.hash('Password123!', 10),
+          name: 'Dr. Fernando C',
+          role: Role.VET,
+          clinicId: clinicC.id,
+          isActive: true,
+        },
+      });
+
+      const loginCRes = await request(app.getHttpServer()).post('/auth/login').send({
+        email: userC.email,
+        password: 'Password123!',
+      });
+      assert.strictEqual(loginCRes.status, 200, 'Login en Clínica C debe ser 200');
+      const tokenC = loginCRes.body.accessToken;
+
+      // 3. Registrar propietario y mascota desde Clínica A (POST /owners y POST /pets)
+      const createOwnerRes = await request(app.getHttpServer())
+        .post('/owners')
+        .set('Authorization', `Bearer ${tokenA}`)
+        .send({
+          name: 'Lorena',
+          lastName: 'Paredes',
+          documentId: '09' + Date.now().toString().slice(-8),
+          phone: '+593988776655',
+          email: 'lorena.' + Date.now() + '@example.com',
+          address: 'Av. Simón Bolívar 456',
+        });
+      assert.strictEqual(createOwnerRes.status, 201, 'Creación de propietario en Clínica A debe ser 201');
+      const ownerAId = createOwnerRes.body.id;
+
+      const createPetRes = await request(app.getHttpServer())
+        .post('/pets')
+        .set('Authorization', `Bearer ${tokenA}`)
+        .send({
+          name: 'Thor',
+          species: 'CANINE',
+          breed: 'Pastor Alemán',
+          sex: 'MALE',
+          birthDate: '2023-04-10',
+          isApproximateBirthDate: false,
+          color: 'Negro',
+          ownerId: ownerAId,
+        });
+      assert.strictEqual(createPetRes.status, 201, 'Registro de mascota en Clínica A debe ser 201');
+      const petAId = createPetRes.body.id;
+
+      // 4. Asignar un tag físico NFC a la nueva mascota
+      const testTagUid = '04' + crypto.randomBytes(5).toString('hex').toUpperCase();
+      const assignTagRes = await request(app.getHttpServer())
+        .post('/tags/assign')
+        .set('Authorization', `Bearer ${tokenA}`)
+        .send({
+          uid: testTagUid,
+          petId: petAId,
+        });
+      assert.strictEqual(assignTagRes.status, 201, 'Asignación de tag debe ser 201');
+
+      // 5. Verificar que se auto-asignó a ClinicPatient de Clínica A con source REGISTERED
+      const clinicPatientA = await prisma.clinicPatient.findUnique({
+        where: { clinicId_petId: { clinicId: CLINIC_A_ID, petId: petAId } },
+      });
+      assert.ok(clinicPatientA, 'Mascota debe estar registrada automáticamente en clinic_patients de Clínica A');
+      assert.strictEqual(clinicPatientA.source, 'REGISTERED', 'El origen debe ser REGISTERED');
+
+      // 6. Verificar que aparece en el listado de pacientes de Clínica A (GET /pets)
+      const listARes = await request(app.getHttpServer())
+        .get('/pets')
+        .set('Authorization', `Bearer ${tokenA}`);
+      assert.strictEqual(listARes.status, 200);
+      assert.ok(
+        listARes.body.data.some((p: any) => p.id === petAId),
+        'Thor debe aparecer en el listado de pacientes de Clínica A'
+      );
+
+      // 7. Verificar aislamiento multi-tenant: Clínica B no ve a Thor en su listado antes de escaneo
+      const listBInitialRes = await request(app.getHttpServer())
+        .get('/pets')
+        .set('Authorization', `Bearer ${tokenB}`);
+      assert.strictEqual(listBInitialRes.status, 200);
+      assert.strictEqual(
+        listBInitialRes.body.data.some((p: any) => p.id === petAId),
+        false,
+        'Thor NO debe aparecer en el listado de Clínica B antes del escaneo'
+      );
+
+      // 8. Escaneo desde Clínica B (GET /tags/resolve/:uid)
+      const resolveBRes = await request(app.getHttpServer())
+        .get(`/tags/resolve/${testTagUid}`)
+        .set('Authorization', `Bearer ${tokenB}`);
+      assert.strictEqual(resolveBRes.status, 200);
+      assert.strictEqual(resolveBRes.body.registered, true);
+      assert.strictEqual(resolveBRes.body.hasFullAccess, true);
+      assert.strictEqual(resolveBRes.body.isInRoster, false, 'isInRoster debe ser false antes de agregarlo');
+
+      // 9. Clínica B pulsa "Agregar a mis pacientes" (POST /pets/:id/roster)
+      const addRosterBRes = await request(app.getHttpServer())
+        .post(`/pets/${petAId}/roster`)
+        .set('Authorization', `Bearer ${tokenB}`)
+        .send({});
+      assert.strictEqual(addRosterBRes.status, 200, 'POST /pets/:id/roster debe retornar 200');
+      assert.strictEqual(addRosterBRes.body.success, true);
+
+      // Verificar en DB que ClinicPatient de Clínica B se creó con source ADDED_AFTER_SCAN
+      const clinicPatientB = await prisma.clinicPatient.findUnique({
+        where: { clinicId_petId: { clinicId: CLINIC_B_ID, petId: petAId } },
+      });
+      assert.ok(clinicPatientB, 'Thor debe existir en clinic_patients de Clínica B');
+      assert.strictEqual(clinicPatientB.source, 'ADDED_AFTER_SCAN');
+
+      // Verificar que se auditó en AccessLog con acción ROSTER_ADD
+      const auditLog = await prisma.accessLog.findFirst({
+        where: { petId: petAId, clinicId: CLINIC_B_ID, action: 'ROSTER_ADD' },
+      });
+      assert.ok(auditLog, 'Debe registrar AccessLog con action ROSTER_ADD');
+
+      // 10. Probar idempotencia de POST /pets/:id/roster
+      const idempotentRes = await request(app.getHttpServer())
+        .post(`/pets/${petAId}/roster`)
+        .set('Authorization', `Bearer ${tokenB}`)
+        .send({});
+      assert.strictEqual(idempotentRes.status, 200, 'Llamada idempotente debe retornar 200 exitosa');
+      const countB = await prisma.clinicPatient.count({
+        where: { clinicId: CLINIC_B_ID, petId: petAId },
+      });
+      assert.strictEqual(countB, 1, 'No debe duplicar el registro en clinic_patients');
+
+      // 11. Comprobar que ahora Thor aparece en el listado de Clínica B (GET /pets)
+      const listBAfterRes = await request(app.getHttpServer())
+        .get('/pets')
+        .set('Authorization', `Bearer ${tokenB}`);
+      assert.strictEqual(listBAfterRes.status, 200);
+      assert.ok(
+        listBAfterRes.body.data.some((p: any) => p.id === petAId),
+        'Thor ahora debe aparecer en el listado de pacientes de Clínica B'
+      );
+
+      // 12. Comprobar que Clínica C NO ve a Thor en su listado
+      const listCRes = await request(app.getHttpServer())
+        .get('/pets')
+        .set('Authorization', `Bearer ${tokenC}`);
+      assert.strictEqual(listCRes.status, 200);
+      assert.strictEqual(
+        listCRes.body.data.some((p: any) => p.id === petAId),
+        false,
+        'Clínica C NO debe ver a Thor en su listado'
+      );
+
+      // 13. Comprobar que Clínica C NO puede agregar a Thor sin un grant activo (404 fail-closed)
+      const addRosterCRes = await request(app.getHttpServer())
+        .post(`/pets/${petAId}/roster`)
+        .set('Authorization', `Bearer ${tokenC}`)
+        .send({});
+      assert.strictEqual(
+        addRosterCRes.status,
+        404,
+        'Clínica C sin grant activo debe recibir 404 sin revelar existencia'
+      );
+
+      // Comprobar que sigue sin aparecer en el listado de C
+      const listCStillEmptyRes = await request(app.getHttpServer())
+        .get('/pets')
+        .set('Authorization', `Bearer ${tokenC}`);
+      assert.strictEqual(
+        listCStillEmptyRes.body.data.some((p: any) => p.id === petAId),
+        false,
+        'Clínica C sigue sin tener a Thor en su listado'
+      );
+
+      // 14. Limpieza final de entidades de prueba en PostgreSQL real
+      await prisma.accessLog.deleteMany({ where: { petId: petAId } });
+      await prisma.accessGrant.deleteMany({ where: { petId: petAId } });
+      await prisma.clinicOwner.deleteMany({ where: { ownerId: ownerAId } });
+      await prisma.clinicPatient.deleteMany({ where: { petId: petAId } });
+      await prisma.tag.deleteMany({ where: { petId: petAId } });
+      await prisma.pet.delete({ where: { id: petAId } });
+      await prisma.owner.delete({ where: { id: ownerAId } });
+      await prisma.user.delete({ where: { id: userC.id } });
+      await prisma.clinic.delete({ where: { id: clinicC.id } });
     });
   });
 });

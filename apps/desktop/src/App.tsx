@@ -179,7 +179,18 @@ export const AppContent: React.FC<AppContentProps> = ({
       case 'login':
         return <LoginScreen onSuccess={handleLoginSuccess} />;
       case 'pet-list':
-        return <PetListScreen />;
+        return (
+          <PetListScreen
+            petsServiceInstance={petsServiceInstance}
+            onSelectPet={(petId) => {
+              setActivePetId(petId);
+              setActivePetUid(undefined);
+              setActiveTagData(undefined);
+              setActiveScreen('clinical-record');
+            }}
+            onRegisterNewPet={() => setActiveScreen('pet-register')}
+          />
+        );
       case 'pet-register':
         return (
           <PetRegisterScreen
@@ -205,6 +216,7 @@ export const AppContent: React.FC<AppContentProps> = ({
         return (
           <PatientFileScreen
             currentClinicId={user?.clinicId}
+            currentUserRole={role ?? undefined}
             petsService={petsServiceInstance}
             uid={activePetUid}
             petId={activePetId}
@@ -234,7 +246,18 @@ export const AppContent: React.FC<AppContentProps> = ({
       case 'staff-management':
         return <UsersScreen currentUserRole={role ?? undefined} />;
       default:
-        return <PetListScreen />;
+        return (
+          <PetListScreen
+            petsServiceInstance={petsServiceInstance}
+            onSelectPet={(petId) => {
+              setActivePetId(petId);
+              setActivePetUid(undefined);
+              setActiveTagData(undefined);
+              setActiveScreen('clinical-record');
+            }}
+            onRegisterNewPet={() => setActiveScreen('pet-register')}
+          />
+        );
     }
   };
 

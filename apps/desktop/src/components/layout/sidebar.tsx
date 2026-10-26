@@ -1,11 +1,10 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import type { Role, SerialPortInfo, HardwareStatus } from '@vet-app/shared-types';
 import { fakeTagReader } from '../../readers/fake-tag-reader';
 import {
   ClinicIcon,
   ClipboardIcon,
   PetIcon,
-  TagIcon,
   CalendarIcon,
   StethoscopeIcon,
   SyringeIcon,
@@ -20,7 +19,6 @@ export type ScreenId =
   | 'login'
   | 'pet-list'
   | 'pet-register'
-  | 'tag-management'
   | 'appointments'
   | 'clinical-record'
   | 'vet-agenda'
@@ -47,7 +45,6 @@ export interface SidebarProps {
 const RECEPTION_NAV_ITEMS: NavItemConfig[] = [
   { id: 'pet-list', label: 'Lista de Pacientes', icon: <ClipboardIcon size={16} /> },
   { id: 'pet-register', label: 'Registro de Mascota', icon: <PetIcon size={16} /> },
-  { id: 'tag-management', label: 'Búsqueda/Asignación de Tag', icon: <TagIcon size={16} /> },
   { id: 'appointments', label: 'Agenda de Visitas', icon: <CalendarIcon size={16} /> },
 ];
 
@@ -78,7 +75,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   role,
   className,
 }) => {
-  const [lastScannedUid, setLastScannedUid] = useState<string | null>(null);
+  const [recentScan, setRecentScan] = useState<{ uid: string; time: string } | null>(null);
+  const scanTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [ports, setPorts] = useState<SerialPortInfo[]>([]);
   const [selectedPort, setSelectedPort] = useState<string>('');
   const [portError, setPortError] = useState<string | null>(null);
@@ -91,6 +89,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
     reason: null,
   });
   const showDevTools = import.meta.env?.VITE_DEV_TOOLS === 'true';
+
+  // Manejador de nueva lectura de tarjeta NFC con temporizador de 10 segundos
+  const handleNewScan = useCallback((uid: string) => {
+    const now = new Date();
+    const hh = String(now.getHours()).padStart(2, '0');
+    const mm = String(now.getMinutes()).padStart(2, '0');
+    const ss = String(now.getSeconds()).padStart(2, '0');
+    const timeFormatted = `${hh}:${mm}:${ss}`;
+
+    setRecentScan({ uid, time: timeFormatted });
+
+    if (scanTimeoutRef.current) {
+      clearTimeout(scanTimeoutRef.current);
+    }
+    scanTimeoutRef.current = setTimeout(() => {
+      setRecentScan(null);
+      scanTimeoutRef.current = null;
+    }, 10000);
+  }, []);
 
   // Consulta periódica y manual de puertos seriales disponibles (refresco cada 2 s)
   const refreshPorts = useCallback(async () => {
@@ -118,7 +135,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   // Suscripción al lector de tags, estado de hardware y refresco periódico cada 2 s
   useEffect(() => {
     const unsubscribe = fakeTagReader.onTag((uid) => {
-      setLastScannedUid(uid);
+      handleNewScan(uid);
     });
 
     let electronTagUnsub: (() => void) | undefined;
@@ -127,7 +144,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     if (typeof window !== 'undefined' && window.electronAPI) {
       if (window.electronAPI.onTagDetected) {
         electronTagUnsub = window.electronAPI.onTagDetected((uid) => {
-          setLastScannedUid(uid);
+          handleNewScan(uid);
         });
       }
 
@@ -160,8 +177,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
       electronTagUnsub?.();
       electronStatusUnsub?.();
       clearInterval(intervalId);
+      if (scanTimeoutRef.current) {
+        clearTimeout(scanTimeoutRef.current);
+      }
     };
-  }, [refreshPorts]);
+  }, [handleNewScan, refreshPorts]);
 
   const handleConnectPort = async () => {
     if (!selectedPort || !window.electronAPI?.connectSerialPort) {
@@ -269,9 +289,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </span>
           </div>
 
-          <div className={styles.nfcUid}>
-            {lastScannedUid ? (
-              <span>UID: {lastScannedUid}</span>
+          <div className={styles.nfcUid} data-testid="nfc-uid-display">
+            {recentScan ? (
+              <span>UID: {recentScan.uid} ({recentScan.time})</span>
             ) : (
               <span style={{ color: 'var(--color-text-muted)' }}>Esperando llavero...</span>
             )}

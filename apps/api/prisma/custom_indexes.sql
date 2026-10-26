@@ -37,3 +37,7 @@ WHERE "status" IN ('PENDING', 'SCHEDULED') AND "deletedAt" IS NULL;
 CREATE INDEX IF NOT EXISTS "idx_pending_notifications" 
 ON "notifications" ("targetDate", "retryCount") 
 WHERE "status" = 'PENDING';
+
+-- 8. Padrón de pacientes por clínica: optimización de consulta y ordenamiento en roster activo (RF-63)
+CREATE INDEX IF NOT EXISTS "idx_clinic_patients_clinic_added" 
+ON "clinic_patients" ("clinicId", "addedAt" DESC);

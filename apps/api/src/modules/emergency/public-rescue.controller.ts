@@ -40,7 +40,10 @@ function renderRescueHtml(profile: EmergencyPetProfileDto): string {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Rescate de Mascota - ${petName}</title>
+  <title>Mascota registrada - contacto de emergencia</title>
+  <meta property="og:title" content="Mascota registrada - contacto de emergencia">
+  <meta property="og:description" content="Portal público de contacto de emergencia para mascotas registradas.">
+  <meta property="og:type" content="website">
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
