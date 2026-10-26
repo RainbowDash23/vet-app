@@ -86,6 +86,11 @@ describe('TagsService & TagsController (T16 / RF-28, RF-29, RF-30, RF-31, RF-32,
         update: async (args: any) => ({ id: args.where.id, ...args.data }),
         upsert: async (args: any) => ({ id: 'co-upserted', ...args.create }),
       },
+      clinicPatient: {
+        findUnique: async () => null,
+        findFirst: async () => null,
+        create: async (args: any) => ({ id: 'cp-created', ...args.data }),
+      },
       $transaction: async (cb: any) => {
         if (typeof cb === 'function') {
           return cb(mockPrisma);

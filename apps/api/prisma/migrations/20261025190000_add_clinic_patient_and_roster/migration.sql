@@ -26,9 +26,6 @@ CREATE INDEX "clinic_patients_clinicId_addedAt_idx" ON "clinic_patients"("clinic
 -- CreateIndex
 CREATE INDEX "clinic_patients_petId_idx" ON "clinic_patients"("petId");
 
--- CreateIndex
-CREATE INDEX IF NOT EXISTS "idx_clinic_patients_clinic_added" ON "clinic_patients" ("clinicId", "addedAt" DESC);
-
 -- AddForeignKey
 ALTER TABLE "clinic_patients" ADD CONSTRAINT "clinic_patients_clinicId_fkey" FOREIGN KEY ("clinicId") REFERENCES "clinics"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 

@@ -410,15 +410,17 @@ describe('E2E: Transaccionalidad Atómica y Reversión Total (Rollback) contra P
       const tokenC = loginCRes.body.accessToken;
 
       // 3. Registrar propietario y mascota desde Clínica A (POST /owners y POST /pets)
+      const ownerDocId = '09' + Date.now().toString().slice(-8);
+      const ownerEmail = 'lorena.' + Date.now() + '@example.com';
       const createOwnerRes = await request(app.getHttpServer())
         .post('/owners')
         .set('Authorization', `Bearer ${tokenA}`)
         .send({
           name: 'Lorena',
           lastName: 'Paredes',
-          documentId: '09' + Date.now().toString().slice(-8),
+          documentId: ownerDocId,
           phone: '+593988776655',
-          email: 'lorena.' + Date.now() + '@example.com',
+          email: ownerEmail,
           address: 'Av. Simón Bolívar 456',
         });
       assert.strictEqual(createOwnerRes.status, 201, 'Creación de propietario en Clínica A debe ser 201');
@@ -435,6 +437,7 @@ describe('E2E: Transaccionalidad Atómica y Reversión Total (Rollback) contra P
           birthDate: '2023-04-10',
           isApproximateBirthDate: false,
           color: 'Negro',
+          notes: 'Alergia a la penicilina y cuidados especiales',
           ownerId: ownerAId,
         });
       assert.strictEqual(createPetRes.status, 201, 'Registro de mascota en Clínica A debe ser 201');
@@ -509,7 +512,12 @@ describe('E2E: Transaccionalidad Atómica y Reversión Total (Rollback) contra P
       });
       assert.ok(auditLog, 'Debe registrar AccessLog con action ROSTER_ADD');
 
-      // 10. Probar idempotencia de POST /pets/:id/roster
+      // 10. Probar idempotencia de POST /pets/:id/roster y que NO duplique AccessLog
+      const rosterLogsBefore = await prisma.accessLog.count({
+        where: { petId: petAId, clinicId: CLINIC_B_ID, action: 'ROSTER_ADD' },
+      });
+      assert.strictEqual(rosterLogsBefore, 1, 'Debe haber exactamente 1 log ROSTER_ADD');
+
       const idempotentRes = await request(app.getHttpServer())
         .post(`/pets/${petAId}/roster`)
         .set('Authorization', `Bearer ${tokenB}`)
@@ -520,17 +528,87 @@ describe('E2E: Transaccionalidad Atómica y Reversión Total (Rollback) contra P
       });
       assert.strictEqual(countB, 1, 'No debe duplicar el registro en clinic_patients');
 
-      // 11. Comprobar que ahora Thor aparece en el listado de Clínica B (GET /pets)
-      const listBAfterRes = await request(app.getHttpServer())
+      const rosterLogsAfter = await prisma.accessLog.count({
+        where: { petId: petAId, clinicId: CLINIC_B_ID, action: 'ROSTER_ADD' },
+      });
+      assert.strictEqual(rosterLogsAfter, 1, 'Llamada idempotente NO debe escribir un nuevo ROSTER_ADD en AccessLog');
+
+      // 11. Con AccessGrant vigente, Clínica B ve el dueño completo y notas en GET /pets
+      const listBActiveRes = await request(app.getHttpServer())
         .get('/pets')
         .set('Authorization', `Bearer ${tokenB}`);
-      assert.strictEqual(listBAfterRes.status, 200);
+      assert.strictEqual(listBActiveRes.status, 200);
+      const thorActiveInB = listBActiveRes.body.data.find((p: any) => p.id === petAId);
+      assert.ok(thorActiveInB, 'Thor debe aparecer en el listado de pacientes de Clínica B');
+      assert.strictEqual(thorActiveInB.notes, 'Alergia a la penicilina y cuidados especiales', 'Con grant vigente B ve notes');
+      assert.strictEqual(thorActiveInB.owner.documentId, ownerDocId, 'Con grant vigente B ve documentId');
+      assert.strictEqual(thorActiveInB.owner.email, ownerEmail, 'Con grant vigente B ve email');
+      assert.strictEqual(thorActiveInB.owner.address, 'Av. Simón Bolívar 456', 'Con grant vigente B ve address');
+
+      // Búsqueda por documentId con grant activo encuentra a Thor
+      const searchBActiveRes = await request(app.getHttpServer())
+        .get(`/pets?query=${ownerDocId}`)
+        .set('Authorization', `Bearer ${tokenB}`);
+      assert.strictEqual(searchBActiveRes.status, 200);
       assert.ok(
-        listBAfterRes.body.data.some((p: any) => p.id === petAId),
-        'Thor ahora debe aparecer en el listado de pacientes de Clínica B'
+        searchBActiveRes.body.data.some((p: any) => p.id === petAId),
+        'Con grant activo, Clínica B debe encontrar a Thor buscando por documentId',
       );
 
-      // 12. Comprobar que Clínica C NO ve a Thor en su listado
+      // 12. Vencer el grant en PostgreSQL real
+      await prisma.accessGrant.updateMany({
+        where: { petId: petAId, clinicId: CLINIC_B_ID },
+        data: { expiresAt: new Date(Date.now() - 3600000) },
+      });
+
+      // Con grant vencido, Clínica B sigue teniendo a Thor en su padrón pero con proyección mínima
+      const listBExpiredRes = await request(app.getHttpServer())
+        .get('/pets')
+        .set('Authorization', `Bearer ${tokenB}`);
+      assert.strictEqual(listBExpiredRes.status, 200);
+      const thorExpiredInB = listBExpiredRes.body.data.find((p: any) => p.id === petAId);
+      assert.ok(thorExpiredInB, 'Thor sigue estando en el padrón de Clínica B tras vencer el grant');
+      assert.strictEqual(thorExpiredInB.notes, undefined, 'Con grant vencido B NO debe ver notes');
+      assert.strictEqual(thorExpiredInB.owner.documentId, undefined, 'Con grant vencido B NO debe ver documentId');
+      assert.strictEqual(thorExpiredInB.owner.email, undefined, 'Con grant vencido B NO debe ver email');
+      assert.strictEqual(thorExpiredInB.owner.address, undefined, 'Con grant vencido B NO debe ver address');
+      assert.strictEqual(thorExpiredInB.owner.name, 'Lorena', 'Con grant vencido B ve el nombre');
+      assert.strictEqual(thorExpiredInB.owner.lastName, 'Paredes', 'Con grant vencido B ve el apellido');
+      assert.strictEqual(thorExpiredInB.owner.phone, '+593988776655', 'Con grant vencido B ve el teléfono');
+
+      // Con grant vencido, buscar por documentId NO debe encontrar la mascota
+      const searchBExpiredRes = await request(app.getHttpServer())
+        .get(`/pets?query=${ownerDocId}`)
+        .set('Authorization', `Bearer ${tokenB}`);
+      assert.strictEqual(searchBExpiredRes.status, 200);
+      assert.strictEqual(
+        searchBExpiredRes.body.data.some((p: any) => p.id === petAId),
+        false,
+        'Con grant vencido, la búsqueda por documentId NO debe encontrar a Thor en Clínica B',
+      );
+
+      // Clínica A (origen) sigue viendo todos los datos y encontrando por documentId
+      const listAStillFullRes = await request(app.getHttpServer())
+        .get('/pets')
+        .set('Authorization', `Bearer ${tokenA}`);
+      assert.strictEqual(listAStillFullRes.status, 200);
+      const thorInA = listAStillFullRes.body.data.find((p: any) => p.id === petAId);
+      assert.ok(thorInA, 'Thor debe aparecer en Clínica A');
+      assert.strictEqual(thorInA.notes, 'Alergia a la penicilina y cuidados especiales', 'Clínica A sigue viendo notes');
+      assert.strictEqual(thorInA.owner.documentId, ownerDocId, 'Clínica A sigue viendo documentId');
+      assert.strictEqual(thorInA.owner.email, ownerEmail, 'Clínica A sigue viendo email');
+      assert.strictEqual(thorInA.owner.address, 'Av. Simón Bolívar 456', 'Clínica A sigue viendo address');
+
+      const searchARes = await request(app.getHttpServer())
+        .get(`/pets?query=${ownerDocId}`)
+        .set('Authorization', `Bearer ${tokenA}`);
+      assert.strictEqual(searchARes.status, 200);
+      assert.ok(
+        searchARes.body.data.some((p: any) => p.id === petAId),
+        'Clínica A (origen) debe seguir encontrando a Thor por su documentId',
+      );
+
+      // 13. Comprobar que Clínica C NO ve a Thor en su listado
       const listCRes = await request(app.getHttpServer())
         .get('/pets')
         .set('Authorization', `Bearer ${tokenC}`);

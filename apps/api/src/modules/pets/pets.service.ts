@@ -128,13 +128,42 @@ export class PetsService {
 
     if (queryDto.query && queryDto.query.trim() !== '') {
       const q = queryDto.query.trim();
-      where.OR = [
+      const searchConditions: Prisma.PetWhereInput[] = [
         { name: { contains: q, mode: 'insensitive' } },
         { breed: { contains: q, mode: 'insensitive' } },
         { owner: { name: { contains: q, mode: 'insensitive' } } },
         { owner: { lastName: { contains: q, mode: 'insensitive' } } },
-        { owner: { documentId: { contains: q, mode: 'insensitive' } } },
       ];
+
+      // La búsqueda por documentId aplica únicamente sobre las mascotas con acceso completo (origen o grant vigente)
+      if (clinicId) {
+        const now = new Date();
+        searchConditions.push({
+          AND: [
+            { owner: { documentId: { contains: q, mode: 'insensitive' } } },
+            {
+              OR: [
+                { createdByClinicId: clinicId },
+                {
+                  accessGrants: {
+                    some: {
+                      clinicId,
+                      revokedAt: null,
+                      expiresAt: { gt: now },
+                    },
+                  },
+                },
+              ],
+            },
+          ],
+        });
+      } else {
+        searchConditions.push({
+          owner: { documentId: { contains: q, mode: 'insensitive' } },
+        });
+      }
+
+      where.OR = searchConditions;
     }
 
     const [total, data] = await Promise.all([
@@ -154,12 +183,42 @@ export class PetsService {
       }),
     ]);
 
+    let projectedData: any[] = data;
+    if (clinicId && data.length > 0) {
+      const nonOriginPets = data.filter((p) => p.createdByClinicId !== clinicId);
+      const activeGrantPetIds = new Set<string>();
+
+      if (nonOriginPets.length > 0) {
+        const nonOriginPetIds = nonOriginPets.map((p) => p.id);
+        const activeGrants = await this.prisma.accessGrant.findMany({
+          where: {
+            clinicId,
+            petId: { in: nonOriginPetIds },
+            revokedAt: null,
+            expiresAt: { gt: new Date() },
+          },
+          select: { petId: true },
+        });
+
+        for (const grant of activeGrants) {
+          activeGrantPetIds.add(grant.petId);
+        }
+      }
+
+      projectedData = data.map((pet) => {
+        const isOrigin = pet.createdByClinicId === clinicId;
+        const hasGrant = activeGrantPetIds.has(pet.id);
+        const hasFullAccess = isOrigin || hasGrant;
+        return filterPetDataByConsent(pet, hasFullAccess);
+      });
+    }
+
     const totalPages = limit > 0 ? Math.ceil(total / limit) : (total > 0 ? 1 : 0);
     const hasNextPage = page < totalPages;
     const hasPrevPage = page > 1 && totalPages > 0;
 
     return {
-      data,
+      data: projectedData,
       meta: {
         total,
         page,
@@ -211,11 +270,9 @@ export class PetsService {
       hasFullAccess = !!activeGrant;
     }
 
-    const clinicPatient = await this.prisma.clinicPatient?.findUnique
-      ? await this.prisma.clinicPatient.findUnique({
-          where: { clinicId_petId: { clinicId, petId: id } },
-        })
-      : null;
+    const clinicPatient = await this.prisma.clinicPatient.findUnique({
+      where: { clinicId_petId: { clinicId, petId: id } },
+    });
 
     const filtered = filterPetDataByConsent(pet, hasFullAccess);
     filtered.isInRoster = !!clinicPatient;
@@ -277,16 +334,16 @@ export class PetsService {
             addedAt: new Date(),
           },
         });
-      }
 
-      await tx.accessLog.create({
-        data: {
-          petId,
-          clinicId,
-          userId: userId ?? null,
-          action: AccessAction.ROSTER_ADD,
-        },
-      });
+        await tx.accessLog.create({
+          data: {
+            petId,
+            clinicId,
+            userId: userId ?? null,
+            action: AccessAction.ROSTER_ADD,
+          },
+        });
+      }
 
       return {
         success: true,

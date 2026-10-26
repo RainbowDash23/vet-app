@@ -255,14 +255,24 @@ function matchCriteria(item: any, where: any, db?: InMemoryDb): boolean {
       }
     }
 
+    if (key === 'accessGrants' && typeof condition === 'object' && condition !== null && db?.accessGrants) {
+      if (condition.some) {
+        const hasGrant = db.accessGrants.some(
+          (ag: any) => ag.petId === item.id && matchCriteria(ag, condition.some, db),
+        );
+        if (!hasGrant) return false;
+        continue;
+      }
+    }
+
     if (key === 'OR' && Array.isArray(condition)) {
-      const orMatched = condition.some((subWhere: any) => matchCriteria(item, subWhere));
+      const orMatched = condition.some((subWhere: any) => matchCriteria(item, subWhere, db));
       if (!orMatched) return false;
       continue;
     }
 
     if (key === 'AND' && Array.isArray(condition)) {
-      const andMatched = condition.every((subWhere: any) => matchCriteria(item, subWhere));
+      const andMatched = condition.every((subWhere: any) => matchCriteria(item, subWhere, db));
       if (!andMatched) return false;
       continue;
     }

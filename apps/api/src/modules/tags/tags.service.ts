@@ -166,11 +166,9 @@ export class TagsService {
 
     const isOriginClinic = tag.pet.createdByClinicId === clinicId;
 
-    const clinicPatient = await this.prisma.clinicPatient?.findUnique
-      ? await this.prisma.clinicPatient.findUnique({
-          where: { clinicId_petId: { clinicId, petId: tag.petId! } },
-        })
-      : null;
+    const clinicPatient = await this.prisma.clinicPatient.findUnique({
+      where: { clinicId_petId: { clinicId, petId: tag.petId! } },
+    });
 
     return {
       registered: true as const,

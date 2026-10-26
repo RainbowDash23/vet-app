@@ -228,6 +228,10 @@ describe('PetsService & PetsController (T13 / RF-17, RF-18, RF-19, RF-20)', () =
           return log;
         },
       },
+      accessGrant: {
+        findMany: async () => [],
+        findFirst: async () => null,
+      },
       clinicOwner: {
         findFirst: async () => null,
         findMany: async () => [],
@@ -282,7 +286,7 @@ describe('PetsService & PetsController (T13 / RF-17, RF-18, RF-19, RF-20)', () =
           }
           return res;
         },
-        findMany: async ({ where, skip, take }: any) => {
+        findMany: async ({ where, skip, take, include }: any) => {
           let list = petsDb.filter((p) => {
             if (where.deletedAt === null && p.deletedAt !== null) return false;
             if (where.ownerId && p.ownerId !== where.ownerId) return false;
@@ -306,6 +310,12 @@ describe('PetsService & PetsController (T13 / RF-17, RF-18, RF-19, RF-20)', () =
           });
           if (skip !== undefined && take !== undefined) {
             list = list.slice(skip, skip + take);
+          }
+          if (include?.owner) {
+            list = list.map((p) => ({
+              ...p,
+              owner: ownersDb.find((o) => o.id === p.ownerId && o.deletedAt === null) ?? null,
+            }));
           }
           return list;
         },
@@ -572,6 +582,65 @@ describe('PetsService & PetsController (T13 / RF-17, RF-18, RF-19, RF-20)', () =
       assert.strictEqual(result.data[0].name, 'Max');
     });
 
+    it('debe proyectar datos completos para clínica de origen y sanitizar (dueño mínimo y sin notes) para clínica externa sin grant', async () => {
+      // Mascota creada por otra clínica pero en el padrón de foreignClinic
+      const foreignClinicId = 'clinic-foreign-123';
+      const foreignPet: MockPet = {
+        id: 'pet-foreign-1',
+        name: 'Zeus',
+        species: PetSpecies.CANINE,
+        breed: 'Husky',
+        sex: PetSex.MALE,
+        birthDate: new Date('2022-01-01'),
+        isApproximateBirthDate: false,
+        color: 'Gris',
+        reproductiveStatus: ReproductiveStatus.INTACT,
+        notes: 'Nota clínica privada',
+        ownerId: 'owner-uuid-1',
+        deletedAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        createdByClinicId: 'clinic-origin-456',
+      };
+      petsDb.push(foreignPet);
+      clinicPatientsDb.push({
+        id: 'cp-foreign-1',
+        clinicId: foreignClinicId,
+        petId: 'pet-foreign-1',
+        source: 'ADDED_AFTER_SCAN',
+        addedAt: new Date(),
+      });
+
+      // 1. Consulta desde foreignClinicId sin grant: debe sanitizar
+      const resForeign = await petsService.findAll({ page: 1, limit: 10 }, foreignClinicId);
+      const petSanitized = resForeign.data.find((p) => p.id === 'pet-foreign-1') as any;
+      assert.ok(petSanitized, 'Debe encontrarse en el padrón de foreignClinic');
+      assert.strictEqual(petSanitized.notes, undefined, 'No debe exponer notes');
+      assert.ok(petSanitized.owner, 'Debe incluir objeto owner');
+      assert.strictEqual(petSanitized.owner.name, 'Carlos');
+      assert.strictEqual(petSanitized.owner.lastName, 'Mendoza');
+      assert.strictEqual(petSanitized.owner.phone, '+593991234567');
+      assert.strictEqual(petSanitized.owner.documentId, undefined, 'No debe exponer documentId');
+      assert.strictEqual(petSanitized.owner.email, undefined, 'No debe exponer email');
+      assert.strictEqual(petSanitized.owner.address, undefined, 'No debe exponer address');
+
+      // 2. Consulta desde clínica de origen: debe incluir todo
+      clinicPatientsDb.push({
+        id: 'cp-origin-1',
+        clinicId: 'clinic-origin-456',
+        petId: 'pet-foreign-1',
+        source: 'REGISTERED',
+        addedAt: new Date(),
+      });
+      const resOrigin = await petsService.findAll({ page: 1, limit: 10 }, 'clinic-origin-456');
+      const petFull = resOrigin.data.find((p) => p.id === 'pet-foreign-1') as any;
+      assert.ok(petFull, 'Debe encontrarse en el padrón de la clínica de origen');
+      assert.strictEqual(petFull.notes, 'Nota clínica privada');
+      assert.strictEqual(petFull.owner.documentId, '1723456789');
+      assert.strictEqual(petFull.owner.email, 'carlos@example.com');
+      assert.strictEqual(petFull.owner.address, 'Av. Amazonas 123');
+    });
+
     it('findById debe retornar la mascota con datos de dueño y tags incluidos', async () => {
       const pet = await petsService.findById('pet-uuid-1', validClinicId);
 
@@ -814,6 +883,9 @@ describe('PetsService & PetsController (T13 / RF-17, RF-18, RF-19, RF-20)', () =
 
   describe('g) Padrón de Pacientes por Clínica (Roster) y POST /pets/:id/roster (RF-63)', () => {
     it('debe agregar una mascota al padrón de la clínica cuando es la clínica de origen y auditar en AccessLog', async () => {
+      // Remover pet-uuid-1 del padrón inicial para probar el alta por primera vez
+      clinicPatientsDb = clinicPatientsDb.filter((cp) => cp.petId !== 'pet-uuid-1');
+
       const result = await petsService.addToRoster('pet-uuid-1', validClinicId, 'user-admin-1');
 
       assert.strictEqual(result.success, true);
@@ -825,15 +897,19 @@ describe('PetsService & PetsController (T13 / RF-17, RF-18, RF-19, RF-20)', () =
       assert.ok(log, 'Debe registrar la acción ROSTER_ADD en AccessLog');
     });
 
-    it('debe ser idempotente: no duplicar si la mascota ya está en el padrón', async () => {
+    it('debe ser idempotente: no duplicar si la mascota ya está en el padrón y no duplicar traza en AccessLog', async () => {
       // pet-uuid-1 ya está en clinicPatientsDb
       const countBefore = clinicPatientsDb.filter((cp) => cp.clinicId === validClinicId).length;
+      const logsBefore = accessLogsDb.filter((l) => l.action === 'ROSTER_ADD').length;
 
       const result = await petsService.addToRoster('pet-uuid-1', validClinicId);
       assert.strictEqual(result.success, true);
 
       const countAfter = clinicPatientsDb.filter((cp) => cp.clinicId === validClinicId).length;
       assert.strictEqual(countAfter, countBefore, 'No debe duplicar entradas en el padrón');
+
+      const logsAfter = accessLogsDb.filter((l) => l.action === 'ROSTER_ADD').length;
+      assert.strictEqual(logsAfter, logsBefore, 'No debe escribir un nuevo ROSTER_ADD en AccessLog');
     });
 
     it('debe rechazar con NotFoundException si una clínica ajena intenta agregarla sin AccessGrant vigente', async () => {
