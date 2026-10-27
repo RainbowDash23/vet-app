@@ -2,11 +2,24 @@ name: CI
 
 on:
   push:
-    branches: [main, dev/**, fix/**]
+    branches: [main, dev/**, fix/**, feat/**]
   pull_request:
     branches: [main]
 
 jobs:
+  gitleaks:
+    name: Secret Leak Detection (Gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Gitleaks CLI
+        run: |
+          docker run --rm -v "${{ github.workspace }}:/repo" zricethezav/gitleaks:latest detect --source="/repo" -v --no-banner --gitleaks-ignore-path="/repo/.gitleaksignore"
+
   test-and-verify:
     name: Build, Lint & Test Suite
     runs-on: ubuntu-latest
@@ -32,6 +45,7 @@ jobs:
       POSTGRES_DB: vet_app_db
       POSTGRES_PORT: '5432'
       DATABASE_URL: 'postgresql://vet_admin:ci_test_password_secure@localhost:5432/vet_app_db?schema=public'
+      DIRECT_URL: 'postgresql://vet_admin:ci_test_password_secure@localhost:5432/vet_app_db?schema=public'
       JWT_SECRET: 'ci_jwt_secret_must_be_at_least_32_characters_long_super_secure'
 
     steps:

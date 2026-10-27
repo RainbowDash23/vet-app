@@ -37,6 +37,8 @@ process.env.DATABASE_URL =
   process.env.DATABASE_URL ||
   `postgresql://${user}:${password}@localhost:${port}/${dbName}?schema=public`;
 
+process.env.DIRECT_URL = process.env.DIRECT_URL || process.env.DATABASE_URL;
+
 const { spawnSync } = require('child_process');
 const res = spawnSync(
   'node',
@@ -47,6 +49,7 @@ const res = spawnSync(
     '--test-concurrency=1',
     'test/access-policy-leaks.e2e-spec.ts',
     'test/rollback.db-spec.ts',
+    'test/bootstrap-admin.db-spec.ts',
   ],
   {
     stdio: 'inherit',

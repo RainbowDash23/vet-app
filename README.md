@@ -222,3 +222,78 @@ pnpm run test:e2e:db
 2. **Limitación de Lectura de MIFARE Classic en Smartphones:**
    - Las tarjetas y llaveros **MIFARE Classic 1K** son compatibles con el lector de mostrador RC522 de la clínica veterinaria, pero **NO pueden ser leídos por teléfonos celulares modernos** (los iPhone y gran parte de teléfonos Android carecen de hardware compatible con MIFARE Classic).
    - *Requisito para el producto final:* Las medallas para collares destinadas a la vía pública deben fabricarse con chips **NFC Forum Type 2** como **NTAG213** o **NTAG215**, legibles universalmente por cualquier smartphone para abrir la página pública `/p/:publicCode`.
+
+
+---
+
+## 8. Despliegue en la Nube (Render + Neon PostgreSQL)
+
+La API del sistema está preparada para su despliegue en contenedores Docker sobre infraestructuras cloud modernas bajo esquemas serverless y de bajo consumo.
+
+### 8.1 Arquitectura de Despliegue
+- **Backend API (`apps/api`):** Alojado en **Render** como servicio web Docker (plan Free). Se construye a partir del `Dockerfile` multi-stage optimizado (base `node:22-slim`, usuario no privilegiado `node` y binarios mínimos de producción). La infraestructura se declara como código mediante el archivo de Blueprint `render.yaml`.
+- **Base de Datos Relacional:** **Neon Serverless PostgreSQL 16**. Opera con arquitectura desacoplada de almacenamiento y cómputo:
+  - `DATABASE_URL`: Conexión hacia el pooler de conexiones (PgBouncer) de Neon con parámetros `?pgbouncer=true&connect_timeout=15` para la operación continua de la aplicación.
+  - `DIRECT_URL`: Conexión directa a la instancia de cómputo para la ejecución de migraciones DDL (`prisma migrate deploy`).
+
+### 8.2 Variables de Entorno para Producción
+
+En el panel de Render, configure las siguientes variables de entorno (ningún secreto ni credencial real debe registrarse en el repositorio):
+
+| Variable | Descripción |
+| :--- | :--- |
+| `NODE_ENV` | Entorno de ejecución; debe fijarse en `production`. |
+| `PORT` | Puerto de escucha HTTP asignado por el host (Render lo inyecta automáticamente). |
+| `DATABASE_URL` | Cadena de conexión al pooler de conexiones de Neon. |
+| `DIRECT_URL` | Cadena de conexión directa de Neon para migraciones de esquema. |
+| `JWT_SECRET` | Clave criptográfica para firma de Access Tokens (mínimo 32 caracteres generados aleatoriamente). |
+| `JWT_REFRESH_SECRET` | Clave criptográfica para Refresh Tokens (mínimo 32 caracteres, distinta de `JWT_SECRET`). |
+| `CORS_ORIGIN` | Lista de orígenes autorizados separados por coma. Se prohíbe el comodín `*` en producción. |
+| `TRUST_PROXY` | Establecer en `true` para delegar la resolución de IP de cliente a las cabeceras del proxy inverso de Render. |
+| `NOTIFICATIONS_CRON_ENABLED` | Establecer en `false` para evitar ejecuciones automáticas continuas que consuman cuota serverless. |
+| `MAIL_DRIVER` | Canal de transporte de correos (`log` para registro en consola o `smtp` con credenciales externas). |
+| `PUBLIC_BASE_URL` | URL pública base del despliegue (ej: `https://vet-app-api.onrender.com`), empleada para generar enlaces QR/NFC `/p/:publicCode`. |
+
+### 8.3 Inicialización del Primer Administrador (`bootstrap:admin`)
+
+> [!WARNING]
+> El comando `prisma db seed` contiene datos de prueba para desarrollo local y **nunca debe ejecutarse en entornos de producción**.
+
+Para inicializar la primera clínica y su cuenta de usuario administrador en producción, utilice la herramienta segura de arranque:
+
+```bash
+pnpm --filter @vet-app/api bootstrap:admin
+```
+
+El script requiere las siguientes variables de entorno al momento de ejecutarse (suministradas mediante la shell de Render o variables temporales):
+- `BOOTSTRAP_ADMIN_EMAIL`: Correo electrónico del administrador principal.
+- `BOOTSTRAP_ADMIN_PASSWORD`: Contraseña de acceso (mínimo 12 caracteres; cifrada con bcrypt a 12 rondas).
+- `BOOTSTRAP_CLINIC_NAME`: Razón social o nombre de la clínica veterinaria.
+- `BOOTSTRAP_CLINIC_CODE`: Código alfanumérico identificador único de la clínica.
+
+**Garantías de seguridad del bootstrap:**
+- **Idempotencia:** Si la clínica y el administrador ya fueron creados previamente y no existen otros usuarios, finaliza exitosamente sin duplicar registros.
+- **Fail-Closed:** Si la base de datos ya contiene otros usuarios registrados, el script aborta inmediatamente la ejecución para prevenir manipulaciones no autorizadas.
+- **Cero fugas:** La contraseña nunca se registra en archivos de log ni se imprime en la salida estándar de consola.
+
+### 8.4 Comprobación de Estado (Health Checks)
+
+La API expone dos endpoints de diagnóstico diferenciados:
+
+1. **Liveness Probe (`GET /health`):**
+   - Retorna `{ "status": "ok", "timestamp": "...", "uptime": 123 }` con código HTTP 200.
+   - **No realiza consultas a la base de datos** y está excluido de la limitación de tasa (*rate limit*).
+   - Es el endpoint configurado en Render (`healthCheckPath: /health`) para verificar que el contenedor se encuentra activo sin despertar la base de datos de Neon de su suspensión.
+
+2. **Readiness Probe (`GET /health/ready`):**
+   - Ejecuta una consulta ligera `SELECT 1` contra la base de datos PostgreSQL.
+   - Retorna `{ "status": "ok", "database": "connected" }` (HTTP 200) si la base de datos responde correctamente.
+   - Retorna `{ "status": "error", "database": "disconnected" }` (HTTP 503 Service Unavailable) si la conexión falla o el cómputo de Neon está inaccesible.
+   - Cuenta con protección de limitación de tasa (*rate limiting*) para evitar saturaciones accidentales.
+
+### 8.5 Consideraciones y Limitaciones del Plan Gratuito
+
+- **Suspensión de Render Web Service:** Tras 15 minutos sin peticiones entrantes, Render suspende el contenedor (*spin down*). La primera solicitud entrante posterior experimentará un arranque en frío (*cold start*) de 50 a 70 segundos mientras el contenedor se descarga e inicializa.
+- **Suspensión de Neon Serverless:** La base de datos de Neon suspende su instancia de cómputo tras 5 minutos de inactividad (el plan gratuito incluye una cuota mensual de 100 Compute Unit-horas). El liveness probe `/health` fue diseñado específicamente para no realizar consultas a la base y preservar esta cuota.
+- **Cold Start Combinado:** Si tanto el contenedor de Render como la base de datos de Neon están suspendidos, la primera petición puede tardar entre 60 y 90 segundos en responder. Una vez activos, las peticiones subsiguientes operan a velocidad de producción estándar.
+- **Migraciones Automáticas en Arranque:** Al no disponer de la característica de pago `preDeployCommand`, el contenedor Docker ejecuta automáticamente `prisma migrate deploy` como parte de su rutina de arranque previa al inicio de NestJS.

@@ -220,11 +220,12 @@ export const PatientFileScreen: React.FC<PatientFileScreenProps> = ({
     };
   }, [data?.publicCode, data?.pet, petId, isOriginClinic, petsService]);
 
-  const publicBaseUrl = (
-    (typeof process !== 'undefined' && process.env?.VITE_PUBLIC_URL) ||
-    import.meta.env?.VITE_PUBLIC_URL ||
+  const rawBase = (
+    (typeof process !== 'undefined' && (process.env?.PUBLIC_BASE_URL || process.env?.VITE_PUBLIC_URL)) ||
+    (typeof import.meta !== 'undefined' && (import.meta.env?.PUBLIC_BASE_URL || import.meta.env?.VITE_PUBLIC_URL)) ||
     'http://localhost:3000/p'
   ).replace(/\/+$/, '');
+  const publicBaseUrl = rawBase.endsWith('/p') ? rawBase : `${rawBase}/p`;
   const emergencyUrl = publicCode ? `${publicBaseUrl}/${publicCode}` : null;
 
   const handleCopyEmergencyLink = async () => {
