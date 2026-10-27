@@ -1,2 +1,5 @@
 # Gitleaks ignore list for false positives in historical test files
 4236304e4fa87e9e0c67e85cfe37b08fcfdcf068:apps/api/test/unit/token-revocation.service.spec.ts:generic-api-key:23
+e395ff84bf9637e886dd5d50cbb252036a392b60:apps/api/test/unit/env.validation.spec.ts:generic-api-key:16
+e395ff84bf9637e886dd5d50cbb252036a392b60:apps/api/test/unit/env.validation.spec.ts:generic-api-key:17
+e395ff84bf9637e886dd5d50cbb252036a392b60:apps/api/test/unit/env.validation.spec.ts:generic-api-key:87

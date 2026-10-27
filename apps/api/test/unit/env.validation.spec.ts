@@ -13,8 +13,8 @@ describe('EnvValidation (RNF-2, RF-10 / Production Security Hardening)', () => {
   const validProdConfig = {
     ...baseValidConfig,
     NODE_ENV: 'production',
-    JWT_SECRET: 'k7F9mX2vP4wQ8zR1tY5uI3oA6sD0fG2hJ', // 32 chars, no sample keywords
-    JWT_REFRESH_SECRET: 'b8N3vC5xZ1mK9lJ7hG5fD3sA2qW4eR6t', // 32 chars, distinct, no sample keywords
+    JWT_SECRET: 'production-signing-token-authorization-suite-ok', // 48 chars, no sample keywords
+    JWT_REFRESH_SECRET: 'production-refresh-token-authorization-suite-ok', // 48 chars, distinct, no sample keywords
     NOTIFICATIONS_CRON_ENABLED: 'false',
     CORS_ORIGIN: 'https://vet-app.example.com',
   };
@@ -84,7 +84,7 @@ describe('EnvValidation (RNF-2, RF-10 / Production Security Hardening)', () => {
     });
 
     it('debe rechazar si JWT_SECRET y JWT_REFRESH_SECRET son idénticos', () => {
-      const sameKey = 'k7F9mX2vP4wQ8zR1tY5uI3oA6sD0fG2hJ';
+      const sameKey = 'production-identical-token-signing-suite-test';
       assert.throws(
         () => {
           validateEnv({
