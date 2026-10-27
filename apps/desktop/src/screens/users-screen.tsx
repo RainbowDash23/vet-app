@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -87,28 +87,45 @@ export const UsersScreen: React.FC<UsersScreenProps> = ({
     },
   });
 
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   const selectedRole = watch('role');
 
-  const loadUsers = async () => {
+  const loadUsers = async (isCancelled?: () => boolean) => {
     if (!isAdmin) return;
     setIsLoadingUsers(true);
     try {
       const list = await usersServiceInstance.getUsers();
       if (Array.isArray(list)) {
+        if (!isMountedRef.current || (isCancelled && isCancelled())) return;
         setUsers(list);
       }
     } catch {
       // Si no se pueden cargar los usuarios, se ignora o se mantiene la lista vacía
     } finally {
-      setIsLoadingUsers(false);
+      if (isMountedRef.current && !(isCancelled && isCancelled())) {
+        setIsLoadingUsers(false);
+      }
     }
   };
 
   useEffect(() => {
+
+    let cancelled = false;
     if (!initialUsers && isAdmin) {
-      void loadUsers();
+      void loadUsers(() => cancelled);
     }
-  }, [isAdmin]);
+    return () => {
+      cancelled = true;
+    };
+  }, [isAdmin, initialUsers]);
 
   const onSubmit = async (values: UserFormValues) => {
     setApiError(null);
@@ -131,8 +148,10 @@ export const UsersScreen: React.FC<UsersScreenProps> = ({
         role: Role.VET,
         licenseNumber: '',
       });
+
       void loadUsers();
     } catch (err: unknown) {
+      if (!isMountedRef.current) return;
       if (err instanceof ApiError) {
         if (err.status === 409) {
           setApiError('Este correo ya está registrado');

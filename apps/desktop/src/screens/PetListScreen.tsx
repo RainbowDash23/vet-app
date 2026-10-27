@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { PetSpecies } from '@vet-app/shared-types';
 import type { PetResponseDto } from '@vet-app/shared-types';
 import { PetsService, petsService as defaultPetsService } from '../services/pets.service';
@@ -32,6 +32,14 @@ export const PetListScreen: React.FC<PetListScreenProps> = ({
   const [isLoading, setIsLoading] = useState<boolean>(!initialPets);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   // Debounce del término de búsqueda (300 ms)
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -41,7 +49,8 @@ export const PetListScreen: React.FC<PetListScreenProps> = ({
     return () => clearTimeout(timer);
   }, [searchInput]);
 
-  const fetchPets = useCallback(async () => {
+  const fetchPets = useCallback(
+    async (isCancelled?: () => boolean) => {
     setIsLoading(true);
     setErrorMessage(null);
     try {
@@ -50,17 +59,25 @@ export const PetListScreen: React.FC<PetListScreenProps> = ({
         page,
         limit,
       });
+      if (!isMountedRef.current || (isCancelled && isCancelled())) {
+        return;
+      }
       setPets(res.data || []);
       const totalCount = res.meta?.total ?? res.data?.length ?? 0;
       const pagesCount = res.meta?.totalPages ?? Math.max(1, Math.ceil(totalCount / limit));
       setTotal(totalCount);
       setTotalPages(pagesCount);
     } catch (err: unknown) {
+      if (!isMountedRef.current || (isCancelled && isCancelled())) {
+        return;
+      }
       setErrorMessage(
         err instanceof Error ? err.message : 'Error al cargar el listado de pacientes'
       );
     } finally {
-      setIsLoading(false);
+      if (isMountedRef.current && !(isCancelled && isCancelled())) {
+        setIsLoading(false);
+      }
     }
   }, [petsServiceInstance, debouncedQuery, page, limit]);
 
@@ -69,7 +86,11 @@ export const PetListScreen: React.FC<PetListScreenProps> = ({
     if (initialPets && !debouncedQuery && page === 1) {
       return;
     }
-    void fetchPets();
+    let cancelled = false;
+    void fetchPets(() => cancelled);
+    return () => {
+      cancelled = true;
+    };
   }, [fetchPets, initialPets, debouncedQuery, page]);
 
   const getSpeciesLabel = (species: PetSpecies | string): string => {

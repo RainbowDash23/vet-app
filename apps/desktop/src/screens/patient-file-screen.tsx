@@ -160,6 +160,19 @@ export const PatientFileScreen: React.FC<PatientFileScreenProps> = ({
   const [isAddingToRoster, setIsAddingToRoster] = useState<boolean>(false);
   const [rosterSuccessMessage, setRosterSuccessMessage] = useState<string | null>(null);
 
+  const isMountedRef = useRef(true);
+  const copyTimeoutRef = useRef<NodeJS.Timeout | number | null>(null);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      if (copyTimeoutRef.current) {
+        clearTimeout(copyTimeoutRef.current);
+      }
+    };
+  }, []);
+
   const authContext = useContext(AuthContext);
   const effectiveClinicId = currentClinicId ?? authContext?.clinicId ?? authContext?.user?.clinicId;
   const effectiveRole: string | undefined = currentUserRole ?? authContext?.role ?? authContext?.user?.role;
@@ -221,7 +234,15 @@ export const PatientFileScreen: React.FC<PatientFileScreenProps> = ({
         await navigator.clipboard.writeText(emergencyUrl);
       }
       setCopiedLink(true);
-      setTimeout(() => setCopiedLink(false), 2000);
+      if (!isMountedRef.current) return;
+      if (copyTimeoutRef.current) {
+        clearTimeout(copyTimeoutRef.current);
+      }
+      copyTimeoutRef.current = setTimeout(() => {
+        if (isMountedRef.current) {
+          setCopiedLink(false);
+        }
+      }, 2000);
     } catch {
       // Fallback
     }
@@ -249,15 +270,19 @@ export const PatientFileScreen: React.FC<PatientFileScreenProps> = ({
         });
       }
       await petsService.assignTag({ uid: cleanUid, petId: targetPetId });
+      if (!isMountedRef.current) return;
       setShowTagModal(false);
       setTagModalUid('');
       if (targetPetId) {
         await loadByPetId(targetPetId);
       }
     } catch (err: unknown) {
+      if (!isMountedRef.current) return;
       setTagModalError(err instanceof Error ? err.message : 'Error al vincular el llavero NFC');
     } finally {
-      setIsSubmittingTag(false);
+      if (isMountedRef.current) {
+        setIsSubmittingTag(false);
+      }
     }
   };
 
@@ -268,6 +293,7 @@ export const PatientFileScreen: React.FC<PatientFileScreenProps> = ({
     setErrorMessage(null);
     try {
       await petsService.addToRoster(targetPetId);
+      if (!isMountedRef.current) return;
       setIsInRoster(true);
       setRosterSuccessMessage('Paciente añadido exitosamente al listado de su clínica');
     } catch (err: unknown) {
@@ -275,7 +301,9 @@ export const PatientFileScreen: React.FC<PatientFileScreenProps> = ({
         err instanceof Error ? err.message : 'Error al agregar el paciente a la lista de la clínica'
       );
     } finally {
-      setIsAddingToRoster(false);
+      if (isMountedRef.current) {
+        setIsAddingToRoster(false);
+      }
     }
   };
 
@@ -294,6 +322,7 @@ export const PatientFileScreen: React.FC<PatientFileScreenProps> = ({
 
       try {
         const result = await petsService.resolveTag(targetUid);
+        if (!isMountedRef.current) return;
 
         if (!result.registered) {
           setData(null);
@@ -319,6 +348,7 @@ export const PatientFileScreen: React.FC<PatientFileScreenProps> = ({
               petsService.getMedicalHistory(resolvedPetId).catch(() => ({ data: [] })),
               petsService.getVaccinations(resolvedPetId).catch(() => ({ data: [] })),
             ]);
+            if (!isMountedRef.current) return;
             setVisits(historyRes.data || []);
             setVaccinations(vacsRes.data || []);
           }
@@ -335,7 +365,9 @@ export const PatientFileScreen: React.FC<PatientFileScreenProps> = ({
           err instanceof Error ? err.message : 'Error al consultar la ficha del paciente'
         );
       } finally {
-        setIsLoading(false);
+        if (isMountedRef.current) {
+          setIsLoading(false);
+        }
       }
     },
     [petsService]
@@ -352,11 +384,13 @@ export const PatientFileScreen: React.FC<PatientFileScreenProps> = ({
 
       try {
         const pet = await petsService.getPetById(targetPetId);
+        if (!isMountedRef.current) return;
         const [historyRes, vacsRes] = await Promise.all([
           petsService.getMedicalHistory(targetPetId).catch(() => ({ data: [] })),
           petsService.getVaccinations(targetPetId).catch(() => ({ data: [] })),
         ]);
 
+        if (!isMountedRef.current) return;
         setData({
           registered: true,
           uid: 'MANUAL_LOOKUP',
@@ -375,7 +409,9 @@ export const PatientFileScreen: React.FC<PatientFileScreenProps> = ({
           err instanceof Error ? err.message : 'Error al cargar los datos de la mascota'
         );
       } finally {
-        setIsLoading(false);
+        if (isMountedRef.current) {
+          setIsLoading(false);
+        }
       }
     },
     [petsService]

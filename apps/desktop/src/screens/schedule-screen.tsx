@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import type { VisitResponseDto, VisitStatus } from '@vet-app/shared-types';
 import { visitsService as defaultVisitsService, VisitsService } from '../services/visits.service';
 import { NewVisitModal } from '../components/screens/new-visit-modal';
@@ -71,6 +71,14 @@ export const ScheduleScreen: React.FC<ScheduleScreenProps> = ({
   const [visits, setVisits] = useState<VisitResponseDto[]>(initialVisits ?? []);
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   // Estados de modales
   const [isNewModalOpen, setIsNewModalOpen] = useState<boolean>(false);
   const [selectedVisitForCancel, setSelectedVisitForCancel] = useState<VisitResponseDto | null>(null);
@@ -91,7 +99,7 @@ export const ScheduleScreen: React.FC<ScheduleScreenProps> = ({
 
   // Carga reactiva de visitas de la API
   const fetchVisitsForDate = useCallback(
-    async (date: string) => {
+    async (date: string, isCancelled?: () => boolean) => {
       // Si se proporcionaron initialVisits y no hay cambio de fecha en pruebas, omitir
       if (initialVisits !== undefined && date === initialDate) {
         return;
@@ -103,18 +111,25 @@ export const ScheduleScreen: React.FC<ScheduleScreenProps> = ({
           clinicId,
           limit: 50,
         });
+        if (!isMountedRef.current || (isCancelled && isCancelled())) return;
         setVisits(response.data);
       } catch (err) {
         console.error('Error al consultar agenda médica:', err);
       } finally {
-        setIsLoading(false);
+        if (isMountedRef.current && !(isCancelled && isCancelled())) {
+          setIsLoading(false);
+        }
       }
     },
     [visitsService, clinicId, initialVisits, initialDate],
   );
 
   useEffect(() => {
-    fetchVisitsForDate(selectedDate);
+    let cancelled = false;
+    void fetchVisitsForDate(selectedDate, () => cancelled);
+    return () => {
+      cancelled = true;
+    };
   }, [selectedDate, fetchVisitsForDate]);
 
   // Navegación de fechas
@@ -331,7 +346,7 @@ export const ScheduleScreen: React.FC<ScheduleScreenProps> = ({
         isOpen={isNewModalOpen}
         onClose={() => setIsNewModalOpen(false)}
         onVisitCreated={() => {
-          fetchVisitsForDate(selectedDate);
+          void fetchVisitsForDate(selectedDate);
         }}
         visitsService={visitsService}
         availablePets={availablePets}
@@ -349,7 +364,7 @@ export const ScheduleScreen: React.FC<ScheduleScreenProps> = ({
           onClose={() => setSelectedVisitForCancel(null)}
           onCancelled={() => {
             setSelectedVisitForCancel(null);
-            fetchVisitsForDate(selectedDate);
+            void fetchVisitsForDate(selectedDate);
           }}
           visitsService={visitsService}
         />

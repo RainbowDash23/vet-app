@@ -14,7 +14,7 @@ describe('UI Integration: Autenticación, Layout y Cero Emojis (SPEC EARS)', () 
         if (url.includes('/clinics/current')) {
           return Promise.resolve({ id: 'clinic-1', name: 'Clínica Veterinaria Central' });
         }
-        return Promise.resolve({ data: [] });
+        return Promise.resolve({ data: [], meta: { total: 0, totalPages: 1 } });
       }),
       onUnauthorized: vi.fn().mockReturnValue(() => {}),
       getRefreshToken: vi.fn().mockReturnValue(null),
@@ -50,7 +50,7 @@ describe('UI Integration: Autenticación, Layout y Cero Emojis (SPEC EARS)', () 
     expect(emojiRegex.test(container.innerHTML)).toBe(false);
   });
 
-  it('cuando el usuario se autentica, despliega el layout completo con Header, Sidebar e información del usuario', () => {
+  it('cuando el usuario se autentica, despliega el layout completo con Header, Sidebar e información del usuario', async () => {
     const mockApiClient = createMockApiClient();
     const adminUser: AuthUserSummary = {
       id: 'admin-1',
@@ -66,6 +66,10 @@ describe('UI Integration: Autenticación, Layout y Cero Emojis (SPEC EARS)', () 
       </AuthProvider>
     );
 
+    // Esperar a que la pantalla inicial (PetListScreen) y datos de clínica se carguen
+    await screen.findByRole('heading', { name: /lista de pacientes/i });
+    await screen.findByText('Clínica Veterinaria Central');
+
     // Layout principal visible
     expect(screen.getByRole('banner')).toBeInTheDocument();
     expect(screen.getByRole('complementary')).toBeInTheDocument();
@@ -79,7 +83,7 @@ describe('UI Integration: Autenticación, Layout y Cero Emojis (SPEC EARS)', () 
     expect(emojiRegex.test(container.innerHTML)).toBe(false);
   });
 
-  it('el botón "Simular lectura NFC" no debe existir por defecto en la interfaz', () => {
+  it('el botón "Simular lectura NFC" no debe existir por defecto en la interfaz', async () => {
     const mockApiClient = createMockApiClient();
     const vetUser: AuthUserSummary = {
       id: 'vet-1',
@@ -94,6 +98,9 @@ describe('UI Integration: Autenticación, Layout y Cero Emojis (SPEC EARS)', () 
         <AppContent />
       </AuthProvider>
     );
+
+    // Esperar a que la pantalla inicial resuelva su carga asíncrona
+    await screen.findByRole('heading', { name: /lista de pacientes/i });
 
     // El botón de simulación debe estar ausente (VITE_DEV_TOOLS no está activo)
     expect(screen.queryByRole('button', { name: /simular lectura nfc/i })).not.toBeInTheDocument();

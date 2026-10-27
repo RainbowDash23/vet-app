@@ -70,6 +70,14 @@ export const OwnerRegisterScreen: React.FC<OwnerRegisterScreenProps> = ({
     },
   });
 
+  const isMountedRef = React.useRef(true);
+  React.useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   const safeDirtyGuard = useSafeDirtyGuard();
   React.useEffect(() => {
     safeDirtyGuard?.setIsDirty(isDirty);
@@ -93,6 +101,7 @@ export const OwnerRegisterScreen: React.FC<OwnerRegisterScreenProps> = ({
 
     try {
       const res = await ownersServiceInstance.lookup(docId);
+      if (!isMountedRef.current) return;
       if (res.exists) {
         setLookupResult({
           checked: true,
@@ -120,7 +129,9 @@ export const OwnerRegisterScreen: React.FC<OwnerRegisterScreenProps> = ({
         setApiErrorMessage('Error de red al consultar el documento del propietario.');
       }
     } finally {
-      setIsCheckingLookup(false);
+      if (isMountedRef.current) {
+        setIsCheckingLookup(false);
+      }
     }
   };
 
@@ -144,6 +155,7 @@ export const OwnerRegisterScreen: React.FC<OwnerRegisterScreenProps> = ({
         address: data.address || null,
       });
 
+      if (!isMountedRef.current) return;
       setCreatedOwner(created);
       onOwnerCreated?.(created);
     } catch (err: unknown) {
@@ -161,7 +173,9 @@ export const OwnerRegisterScreen: React.FC<OwnerRegisterScreenProps> = ({
         setApiErrorMessage('Error de red al registrar el propietario.');
       }
     } finally {
-      setIsSubmitting(false);
+      if (isMountedRef.current) {
+        setIsSubmitting(false);
+      }
     }
   };
 

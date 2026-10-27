@@ -166,4 +166,28 @@ describe('UI: PetListScreen (SPEC EARS)', () => {
     ).toBeInTheDocument();
     expect(screen.queryByText(/simulación en la barra lateral/i)).not.toBeInTheDocument();
   });
+
+  it('no realiza actualizaciones de estado tras el desmontaje del componente (evita ReferenceError: window is not defined)', async () => {
+    let resolvePets!: (value: unknown) => void;
+    const deferredPromise = new Promise((resolve) => {
+      resolvePets = resolve;
+    });
+    const mockService = {
+      getPets: vi.fn().mockReturnValue(deferredPromise),
+    } as unknown as PetsService;
+
+    const { unmount } = render(<PetListScreen petsServiceInstance={mockService} />);
+    unmount();
+
+    // Simular la destruccion de window como ocurre al desmontar el entorno JSDOM en CI
+    const originalWindow = global.window;
+    delete (global as unknown as { window?: unknown }).window;
+
+    try {
+      resolvePets({ data: [], meta: { total: 0, totalPages: 1 } });
+      await new Promise((r) => setTimeout(r, 30));
+    } finally {
+      (global as unknown as { window?: unknown }).window = originalWindow;
+    }
+  });
 });

@@ -8,6 +8,7 @@ export default defineConfig({
     pool: 'forks',
     globals: true,
     testTimeout: 15000,
+    dangerouslyIgnoreUnhandledErrors: false,
     include: ['test/ui/**/*.{spec,test}.{ts,tsx}'],
     setupFiles: ['./test/ui/setup.ts'],
   },

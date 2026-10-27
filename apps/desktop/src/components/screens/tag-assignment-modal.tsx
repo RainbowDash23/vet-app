@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import type { PetResponseDto } from '@vet-app/shared-types';
 import {
   Dialog,
@@ -85,6 +85,14 @@ export const TagAssignmentModal: React.FC<TagAssignmentModalProps> = ({
   const [selectedPetId, setSelectedPetId] = useState<string | null>(initialSelectedPetId);
   const [isSearching, setIsSearching] = useState<boolean>(false);
   const [isAssigning, setIsAssigning] = useState<boolean>(false);
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   const [errorMessage, setErrorMessage] = useState<string | null>(initialError);
 
   // Sincronizar initialPets si cambian desde props
@@ -124,6 +132,7 @@ export const TagAssignmentModal: React.FC<TagAssignmentModalProps> = ({
 
       if (searchFn) {
         const response = await searchFn(searchQuery);
+        if (!isMountedRef.current) return;
         setPets(response?.data || []);
       }
     } catch (err: unknown) {
@@ -131,7 +140,9 @@ export const TagAssignmentModal: React.FC<TagAssignmentModalProps> = ({
         err instanceof Error ? err.message : 'Error al buscar mascotas en el sistema'
       );
     } finally {
-      setIsSearching(false);
+      if (isMountedRef.current) {
+        setIsSearching(false);
+      }
     }
   }, [petsService, searchQuery]);
 
@@ -174,7 +185,9 @@ export const TagAssignmentModal: React.FC<TagAssignmentModalProps> = ({
         setErrorMessage('Error inesperado al intentar vincular el tag.');
       }
     } finally {
-      setIsAssigning(false);
+      if (isMountedRef.current) {
+        setIsAssigning(false);
+      }
     }
   }, [petsService, selectedPetId, uid, onAssignSuccess, onClose]);
 

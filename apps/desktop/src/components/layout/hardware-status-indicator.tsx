@@ -24,6 +24,7 @@ export const HardwareStatusIndicator: React.FC<HardwareStatusIndicatorProps> = (
 
   // Sincronizar o suscribir a cambios de hardware serial (RF-34)
   useEffect(() => {
+    let isMounted = true;
     if (statusProp !== undefined) {
       setInternalStatus(statusProp);
       return;
@@ -32,7 +33,7 @@ export const HardwareStatusIndicator: React.FC<HardwareStatusIndicatorProps> = (
     if (typeof window !== 'undefined' && window.electronAPI) {
       // Consulta de estado inicial si la API está disponible
       window.electronAPI.getHardwareStatus?.().then((initialStatus) => {
-        if (initialStatus) {
+        if (isMounted && initialStatus) {
           setInternalStatus(initialStatus);
         }
       }).catch(() => {
@@ -41,10 +42,13 @@ export const HardwareStatusIndicator: React.FC<HardwareStatusIndicatorProps> = (
 
       // Suscripción reactiva a eventos de cambio de hardware
       const unsubscribe = window.electronAPI.onHardwareStatusChange?.((nextStatus) => {
-        setInternalStatus(nextStatus);
+        if (isMounted) {
+          setInternalStatus(nextStatus);
+        }
       });
 
       return () => {
+        isMounted = false;
         unsubscribe?.();
       };
     }

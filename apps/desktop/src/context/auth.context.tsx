@@ -4,6 +4,7 @@ import React, {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import { Role } from '@vet-app/shared-types';
@@ -50,6 +51,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({
     apiClient.setTokens(initialTokens.accessToken, initialTokens.refreshToken);
   }
 
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   const [user, setUser] = useState<AuthUserSummary | null>(initialUser);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -69,15 +78,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({
     } catch (err) {
       console.warn('[AuthProvider] Error en cierre de sesión:', err);
     } finally {
-      setUser(null);
-      setError(null);
-      setIsLoading(false);
+      if (isMountedRef.current) {
+        setUser(null);
+        setError(null);
+        setIsLoading(false);
+      }
     }
   }, [authService]);
 
   // Manejo de eventos de sesión revocada o 401 sin refresh (RF-4)
   useEffect(() => {
     const unsubscribe = apiClient.onUnauthorized(() => {
+      if (!isMountedRef.current) return;
       setUser(null);
       setError('Sesión expirada o no autorizada. Por favor ingresa nuevamente.');
     });
@@ -98,16 +110,22 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({
           role: response.user.role,
           clinicId: response.clinicId || response.user.clinicId,
         };
-        setUser(resolvedUser);
+        if (isMountedRef.current) {
+          setUser(resolvedUser);
+        }
       } catch (err: unknown) {
         const message =
           err instanceof Error
             ? err.message
             : 'Error de autenticación. Verifica tus credenciales.';
-        setError(message);
+        if (isMountedRef.current) {
+          setError(message);
+        }
         throw err;
       } finally {
-        setIsLoading(false);
+        if (isMountedRef.current) {
+          setIsLoading(false);
+        }
       }
     },
     [authService],
@@ -130,11 +148,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({
         role: response.user.role,
         clinicId: response.clinicId || response.user.clinicId,
       };
-      setUser(resolvedUser);
+      if (isMountedRef.current) {
+        setUser(resolvedUser);
+      }
     } catch {
       await logout();
     } finally {
-      setIsLoading(false);
+      if (isMountedRef.current) {
+        setIsLoading(false);
+      }
     }
   }, [apiClient, authService, logout]);
 

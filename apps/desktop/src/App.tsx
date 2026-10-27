@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import type { ResolveTagSuccessDto } from '@vet-app/shared-types';
 import { MainLayout, ScreenId } from './components/layout';
 import { AuthProvider, useAuth } from './context/auth.context';
@@ -67,6 +67,14 @@ export const AppContent: React.FC<AppContentProps> = ({
     message: '',
   });
 
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   // Si cambia el estado de autenticación y no hay initialScreen forzado
   useEffect(() => {
     if (!initialScreen) {
@@ -116,6 +124,7 @@ export const AppContent: React.FC<AppContentProps> = ({
 
       try {
         const res = await petsServiceInstance.resolveTag(uid);
+        if (!isMountedRef.current) return;
 
         if (!res.registered) {
           // Tag no asignado: redirige a PetRegisterScreen con UID precargado
@@ -131,6 +140,7 @@ export const AppContent: React.FC<AppContentProps> = ({
         setActiveTagData(successData);
         setActiveScreen('clinical-record');
       } catch (error) {
+        if (!isMountedRef.current) return;
         if (error instanceof ApiError && error.status === 403) {
           // Vínculo revocado o no autorizado (RF-70)
           setRevocationAlert({

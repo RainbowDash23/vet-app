@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import type {
   VisitResponseDto,
   VisitNoteResponseDto,
@@ -179,6 +179,14 @@ export const VisitConsultationScreen: React.FC<VisitConsultationScreenProps> = (
     );
   }, [isClosed, weight, temperature, heartRate, respiratoryRate, capillaryRefillTime, notes, diagnosis, treatment, initialVisit]);
 
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   const safeDirtyGuard = useSafeDirtyGuard();
   useEffect(() => {
     safeDirtyGuard?.setIsDirty(isDirty);
@@ -270,6 +278,7 @@ export const VisitConsultationScreen: React.FC<VisitConsultationScreenProps> = (
 
     try {
       const updated = await visitsService.attendVisit(visit.id, payload);
+      if (!isMountedRef.current) return;
       setVisit(updated);
       setFeedback({
         type: 'success',
@@ -290,7 +299,9 @@ export const VisitConsultationScreen: React.FC<VisitConsultationScreenProps> = (
         });
       }
     } finally {
-      setIsSaving(false);
+      if (isMountedRef.current) {
+        setIsSaving(false);
+      }
     }
   };
 
@@ -303,6 +314,7 @@ export const VisitConsultationScreen: React.FC<VisitConsultationScreenProps> = (
 
     try {
       const closed = await visitsService.closeVisit(visit.id);
+      if (!isMountedRef.current) return;
       setVisit(closed);
       setIsCloseConfirmOpen(false);
       setFeedback({
@@ -324,7 +336,9 @@ export const VisitConsultationScreen: React.FC<VisitConsultationScreenProps> = (
         });
       }
     } finally {
-      setIsClosing(false);
+      if (isMountedRef.current) {
+        setIsClosing(false);
+      }
     }
   };
 

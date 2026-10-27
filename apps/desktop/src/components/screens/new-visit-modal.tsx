@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import type { VisitResponseDto, CreateVisitDto } from '@vet-app/shared-types';
 import {
   Dialog,
@@ -75,6 +75,14 @@ export const NewVisitModal: React.FC<NewVisitModalProps> = ({
   const [durationMinutes, setDurationMinutes] = useState<number>(initialDurationMinutes);
   const [reason, setReason] = useState<string>(initialReason);
 
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(initialError);
 
@@ -138,6 +146,7 @@ export const NewVisitModal: React.FC<NewVisitModalProps> = ({
       }
       onClose();
     } catch (error: unknown) {
+      if (!isMountedRef.current) return;
       if (error instanceof ApiError && error.status === 409) {
         // Manejo explícito de colisión de horario de agenda (RF-40)
         setErrorMessage(
@@ -151,7 +160,9 @@ export const NewVisitModal: React.FC<NewVisitModalProps> = ({
         setErrorMessage('Ocurrió un error inesperado al intentar agendar la cita');
       }
     } finally {
-      setIsLoading(false);
+      if (isMountedRef.current) {
+        setIsLoading(false);
+      }
     }
   };
 

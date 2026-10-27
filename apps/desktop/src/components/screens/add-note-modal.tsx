@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -57,6 +57,14 @@ export const AddNoteModal: React.FC<AddNoteModalProps> = ({
   initialContent = '',
 }) => {
   const [content, setContent] = useState<string>(initialContent);
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -89,6 +97,7 @@ export const AddNoteModal: React.FC<AddNoteModalProps> = ({
       }
       onClose();
     } catch (err: unknown) {
+      if (!isMountedRef.current) return;
       if (err instanceof ApiError) {
         setErrorMessage(err.message || 'Error al registrar la nota de evolución');
       } else if (err instanceof Error) {
@@ -97,7 +106,9 @@ export const AddNoteModal: React.FC<AddNoteModalProps> = ({
         setErrorMessage('Ocurrió un error inesperado al registrar la nota');
       }
     } finally {
-      setIsLoading(false);
+      if (isMountedRef.current) {
+        setIsLoading(false);
+      }
     }
   };
 

@@ -43,7 +43,7 @@ describe('UI Integration: Pantalla de Gestión de Usuarios (UsersScreen)', () =>
     // Con rol ADMIN debe permitir el acceso
     rerender(
       <AuthProvider initialUser={adminUser}>
-        <UsersScreen currentUserRole={Role.ADMIN} />
+        <UsersScreen currentUserRole={Role.ADMIN} initialUsers={[]} />
       </AuthProvider>
     );
 

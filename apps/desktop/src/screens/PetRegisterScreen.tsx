@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -88,6 +88,14 @@ export const PetRegisterScreen: React.FC<PetRegisterScreenProps> = ({
       nfcUid: initialNfcUid ?? '',
     },
   });
+
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const safeDirtyGuard = useSafeDirtyGuard();
   useEffect(() => {
@@ -198,6 +206,7 @@ export const PetRegisterScreen: React.FC<PetRegisterScreenProps> = ({
             petId: newPet.id,
           });
         } catch (tagErr: unknown) {
+          if (!isMountedRef.current) return;
           if (tagErr instanceof ApiError) {
             if (tagErr.status === 409) {
               setTagWarningMessage('Mascota creada, pero no se pudo asociar el llavero: El tag ya se encuentra asignado a otro paciente o la mascota ya posee un llavero activo.');
@@ -214,9 +223,11 @@ export const PetRegisterScreen: React.FC<PetRegisterScreenProps> = ({
         }
       }
 
+      if (!isMountedRef.current) return;
       setCreatedPet(newPet);
       onPetCreated?.(newPet);
     } catch (err: unknown) {
+      if (!isMountedRef.current) return;
       if (err instanceof ApiError) {
         if (err.status === 404) {
           setApiErrorMessage('No se encontró el propietario seleccionado o no pertenece a esta clínica.');
@@ -233,7 +244,9 @@ export const PetRegisterScreen: React.FC<PetRegisterScreenProps> = ({
         setApiErrorMessage('Error de conexión al registrar la mascota.');
       }
     } finally {
-      setIsSubmitting(false);
+      if (isMountedRef.current) {
+        setIsSubmitting(false);
+      }
     }
   };
 

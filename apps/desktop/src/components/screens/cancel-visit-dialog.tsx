@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   AlertDialog,
   AlertDialogContent,
@@ -68,6 +68,14 @@ export const CancelVisitDialog: React.FC<CancelVisitDialogProps> = ({
   initialReason = '',
 }) => {
   const [reason, setReason] = useState<string>(initialReason);
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -100,6 +108,7 @@ export const CancelVisitDialog: React.FC<CancelVisitDialogProps> = ({
       }
       onClose();
     } catch (error: unknown) {
+      if (!isMountedRef.current) return;
       if (error instanceof ApiError && error.message) {
         setErrorMessage(error.message);
       } else if (error instanceof Error) {
@@ -108,7 +117,9 @@ export const CancelVisitDialog: React.FC<CancelVisitDialogProps> = ({
         setErrorMessage('Ocurrió un error al intentar cancelar la cita médica');
       }
     } finally {
-      setIsLoading(false);
+      if (isMountedRef.current) {
+        setIsLoading(false);
+      }
     }
   };
 

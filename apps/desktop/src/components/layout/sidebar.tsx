@@ -77,6 +77,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const [recentScan, setRecentScan] = useState<{ uid: string; time: string } | null>(null);
   const scanTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   const [ports, setPorts] = useState<SerialPortInfo[]>([]);
   const [selectedPort, setSelectedPort] = useState<string>('');
   const [portError, setPortError] = useState<string | null>(null);
@@ -114,6 +122,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     if (typeof window !== 'undefined' && window.electronAPI?.listSerialPorts) {
       try {
         const list = await window.electronAPI.listSerialPorts();
+        if (!isMountedRef.current) return;
         const safeList = list || [];
         setPorts(safeList);
         setSelectedPort((current) => {
@@ -150,7 +159,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       if (window.electronAPI.getHardwareStatus) {
         window.electronAPI.getHardwareStatus().then((initialStatus) => {
-          if (initialStatus) {
+          if (isMountedRef.current && initialStatus) {
             setHardwareStatus(initialStatus);
           }
         }).catch(() => {});
@@ -158,6 +167,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       if (window.electronAPI.onHardwareStatusChange) {
         electronStatusUnsub = window.electronAPI.onHardwareStatusChange((nextStatus) => {
+          if (!isMountedRef.current) return;
           setHardwareStatus(nextStatus);
           if (nextStatus.connected && nextStatus.portName) {
             setSelectedPort(nextStatus.portName);
