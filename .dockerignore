@@ -1,0 +1,37 @@
+# Version control
+.git/
+.gitignore
+.gitleaksignore
+
+# Documentation, specifications and firmware
+docs/
+specs/
+firmware/
+
+# Environment files and credentials
+.env*
+*.pem
+*.key
+config.py
+
+# Dependencies and build outputs
+node_modules/
+.pnpm-store/
+dist/
+dist-electron/
+build/
+out/
+*.tsbuildinfo
+
+# Desktop app (not needed for backend API container)
+apps/desktop/
+
+# Test coverage and reports
+coverage/
+*.log
+
+# IDE & OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
