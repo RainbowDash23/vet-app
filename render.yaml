@@ -10,7 +10,7 @@ services:
       - key: NODE_ENV
         value: production
       - key: TRUST_PROXY
-        value: "true"
+        value: "1"
       - key: NOTIFICATIONS_CRON_ENABLED
         value: "false"
       - key: MAIL_DRIVER

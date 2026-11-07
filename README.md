@@ -249,7 +249,7 @@ En el panel de Render, configure las siguientes variables de entorno (ningún se
 | `JWT_SECRET` | Clave criptográfica para firma de Access Tokens (mínimo 32 caracteres generados aleatoriamente). |
 | `JWT_REFRESH_SECRET` | Clave criptográfica para Refresh Tokens (mínimo 32 caracteres, distinta de `JWT_SECRET`). |
 | `CORS_ORIGIN` | Lista de orígenes autorizados separados por coma. Se prohíbe el comodín `*` en producción. |
-| `TRUST_PROXY` | Establecer en `true` para delegar la resolución de IP de cliente a las cabeceras del proxy inverso de Render. |
+| `TRUST_PROXY` | Número de saltos de proxy confiables (fijar en `"1"` en Render). Protege el rate limit contra falsificación en `X-Forwarded-For`. |
 | `NOTIFICATIONS_CRON_ENABLED` | Establecer en `false` para evitar ejecuciones automáticas continuas que consuman cuota serverless. |
 | `MAIL_DRIVER` | Canal de transporte de correos (`log` para registro en consola o `smtp` con credenciales externas). |
 | `PUBLIC_BASE_URL` | URL pública base del despliegue (ej: `https://vet-app-api.onrender.com`), empleada para generar enlaces QR/NFC `/p/:publicCode`. |
@@ -297,3 +297,24 @@ La API expone dos endpoints de diagnóstico diferenciados:
 - **Suspensión de Neon Serverless:** La base de datos de Neon suspende su instancia de cómputo tras 5 minutos de inactividad (el plan gratuito incluye una cuota mensual de 100 Compute Unit-horas). El liveness probe `/health` fue diseñado específicamente para no realizar consultas a la base y preservar esta cuota.
 - **Cold Start Combinado:** Si tanto el contenedor de Render como la base de datos de Neon están suspendidos, la primera petición puede tardar entre 60 y 90 segundos en responder. Una vez activos, las peticiones subsiguientes operan a velocidad de producción estándar.
 - **Migraciones Automáticas en Arranque:** Al no disponer de la característica de pago `preDeployCommand`, el contenedor Docker ejecuta automáticamente `prisma migrate deploy` como parte de su rutina de arranque previa al inicio de NestJS.
+
+
+### 8.6 Comprobación de Saltos de Proxy (TRUST_PROXY) en Render
+
+En entornos de producción tras un proxy inverso (como Render), el limitador de tasa (*rate limit* / `UserThrottlerGuard`) utiliza la dirección IP de origen (`req.ip`) para restringir intentos abusivos de peticiones no autenticadas.
+
+#### ¿Por qué usar un número de saltos (`1`) en lugar de `true`?
+- Si `TRUST_PROXY` se configura como `true`, Express asume que toda la cadena de proxies es confiable y toma la IP del extremo izquierdo de `X-Forwarded-For`. Un atacante podría eludir el rate limit simplemente inyectando cabeceras arbitrarias: `X-Forwarded-For: <ip_falsa>, <ip_real>`.
+- Al configurar `TRUST_PROXY="1"`, Express confía exactamente en **1 salto** (el proxy de entrada de Render) y selecciona la IP inmediatamente anterior al último proxy (`<ip_real>`), ignorando cualquier valor previo falsificado por el cliente.
+
+#### Cómo comprobar la cantidad de saltos reales en Render:
+1. **Inspección de cabeceras en ejecución:** En un entorno de prueba o endpoint temporal, inspeccione `req.headers['x-forwarded-for']` y el arreglo `req.ips` generado por Express al recibir una petición externa.
+2. **Topología típica de Render:**
+   - **Despliegue directo en Render (`onrender.com`):** Existe 1 único nivel de proxy reverso/balanceador de carga antes del contenedor. El valor correcto es `TRUST_PROXY="1"`.
+   - **Render con Cloudflare / WAF externo delante:** Si el dominio de la clínica pasa por un proxy de Cloudflare (modo proxy activo) hacia Render, existirán 2 saltos (Cloudflare Edge → Render Load Balancer → Contenedor). En este caso, el valor apropiado es `TRUST_PROXY="2"`.
+3. **Prueba de validación con `curl`:**
+   Envíe una petición simulando un intento de falsificación:
+   ```bash
+   curl -H "X-Forwarded-For: 203.0.113.195" https://vet-app-api.onrender.com/health/ready
+   ```
+   Revise en los logs del servidor que la IP registrada corresponda a su IP pública real y **no** a la IP falsificada `203.0.113.195`.
