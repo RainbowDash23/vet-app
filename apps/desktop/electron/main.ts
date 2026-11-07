@@ -209,14 +209,40 @@ export function registerIpcHandlers(
     };
   });
 
+  // Verificación de autorización de simulación (desactivada en app empaquetada salvo variable explícita)
+  const isSimulationAllowed = (): boolean => {
+    if (!appInstance?.isPackaged) {
+      return true;
+    }
+    return (
+      process.env.VITE_DEV_TOOLS === 'true' ||
+      process.env.ENABLE_SIMULATION === 'true' ||
+      process.env.ELECTRON_ENABLE_SIMULATION === 'true'
+    );
+  };
+
   // Simulación de lectura de tag NFC delegando a SerialManager (RF-27)
   ipc.handle('nfc:simulate-tag', (_event: unknown, uid: string) => {
+    if (!isSimulationAllowed()) {
+      return {
+        success: false,
+        emittedUid: '',
+        error: 'Simulación deshabilitada en la aplicación empaquetada',
+      };
+    }
     manager.processIncomingData(`UID:${uid}\r\n`);
     return { success: true, emittedUid: uid };
   });
 
   // Compatibilidad con canal previo de simulación
   ipc.handle('nfc:simulate-hardware-tag', (_event: unknown, uid: string) => {
+    if (!isSimulationAllowed()) {
+      return {
+        success: false,
+        emittedUid: '',
+        error: 'Simulación deshabilitada en la aplicación empaquetada',
+      };
+    }
     manager.processIncomingData(`UID:${uid}\r\n`);
     return { success: true, emittedUid: uid };
   });

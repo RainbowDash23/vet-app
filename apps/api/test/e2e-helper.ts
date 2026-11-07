@@ -916,7 +916,12 @@ export async function createTestApp(customDb?: InMemoryDb): Promise<{
     : undefined;
 
   if (isRealDb && syncToPostgres) {
-    await syncToPostgres();
+    try {
+      await syncToPostgres();
+    } catch (err) {
+      await app.close();
+      throw err;
+    }
   }
 
   return { app, db, prisma: prismaInstance, syncToPostgres, isRealDb };

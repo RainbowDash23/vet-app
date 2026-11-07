@@ -21,9 +21,9 @@ describe('Inyección de URL de API en Tiempo de Build (VITE_API_URL)', () => {
   it('debe resolver la variable de entorno VITE_API_URL en proceso si está definida', () => {
     const original = process.env.VITE_API_URL;
     try {
-      process.env.VITE_API_URL = 'https://vet-app-api.onrender.com';
+      process.env.VITE_API_URL = 'https://api.veterinaria-test.com';
       const client = new ApiClient();
-      assert.strictEqual(client.getBaseUrl(), 'https://vet-app-api.onrender.com');
+      assert.strictEqual(client.getBaseUrl(), 'https://api.veterinaria-test.com');
     } finally {
       if (original !== undefined) {
         process.env.VITE_API_URL = original;

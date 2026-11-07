@@ -252,7 +252,7 @@ En el panel de Render, configure las siguientes variables de entorno (ningún se
 | `TRUST_PROXY` | Número de saltos de proxy confiables (fijar en `"1"` en Render). Protege el rate limit contra falsificación en `X-Forwarded-For`. |
 | `NOTIFICATIONS_CRON_ENABLED` | Establecer en `false` para evitar ejecuciones automáticas continuas que consuman cuota serverless. |
 | `MAIL_DRIVER` | Canal de transporte de correos (`log` para registro en consola o `smtp` con credenciales externas). |
-| `PUBLIC_BASE_URL` | URL pública base del despliegue (ej: `https://vet-app-api.onrender.com`), empleada para generar enlaces QR/NFC `/p/:publicCode`. |
+| `PUBLIC_BASE_URL` | URL pública base del despliegue (ej: `https://TU-SERVICIO.onrender.com`), empleada para generar enlaces QR/NFC `/p/:publicCode`. |
 
 ### 8.3 Inicialización del Primer Administrador (`bootstrap:admin`)
 
@@ -315,7 +315,7 @@ En entornos de producción tras un proxy inverso (como Render), el limitador de 
 3. **Prueba de validación con `curl`:**
    Envíe una petición simulando un intento de falsificación:
    ```bash
-   curl -H "X-Forwarded-For: 203.0.113.195" https://vet-app-api.onrender.com/health/ready
+   curl -H "X-Forwarded-For: 203.0.113.195" https://TU-SERVICIO.onrender.com/health/ready
    ```
    Revise en los logs del servidor que la IP registrada corresponda a su IP pública real y **no** a la IP falsificada `203.0.113.195`.
 
@@ -334,7 +334,7 @@ Para generar el instalador de Windows (`.exe`):
 pnpm --filter @vet-app/desktop package:dist
 
 # Compilar inyectando la URL de producción de la API (sin secretos ni URLs fijas en código)
-VITE_API_URL=https://vet-app-api.onrender.com pnpm --filter @vet-app/desktop package:dist
+VITE_API_URL=https://TU-SERVICIO.onrender.com pnpm --filter @vet-app/desktop package:dist
 ```
 
 El instalador se genera en `apps/desktop/release/VetApp-Setup-<version>.exe` junto con el archivo de manifiesto `latest.yml`.
@@ -356,18 +356,41 @@ El instalador de VetApp está configurado con privilegios de usuario estándar (
   - Si la aplicación está al día, si ocurre un error de red o si la comprobación tarda más de 10 segundos (timeout de seguridad), la ventana de carga se cierra suavemente y se presenta de inmediato la pantalla principal.
 - **Seguridad en actualizaciones:** No se permiten versiones preliminares (`allowPrerelease: false`) ni retrocesos de versión no controlados (`allowDowngrade: false`). En modo de desarrollo (`NODE_ENV !== 'production'`), el auto-updater se desactiva automáticamente.
 
-### 9.4 Procedimiento de Lanzamiento de una Nueva Versión (Release)
+### 9.4 Procedimiento de Lanzamiento y CI en GitHub Actions
 
-El flujo de integración continua `.github/workflows/release.yml` automatiza la compilación y publicación de releases oficiales:
+El flujo [`.github/workflows/release.yml`](.github/workflows/release.yml) automatiza la compilación del frontend, empaquetado del instalador y publicación en GitHub:
+
+#### 1. Configuración de Variables de Repositorio en GitHub
+Antes de ejecutar el pipeline de release, configure la variable de repositorio pública en GitHub:
+1. Navegue en el repositorio a: **Settings > Secrets and variables > Actions > Variables**.
+2. Presione **New repository variable**.
+3. Defina:
+   - **Name:** `VITE_API_URL`
+   - **Value:** `https://TU-SERVICIO.onrender.com` (URL base de su API backend en producción).
+   - *(Opcional)* `VITE_PUBLIC_URL`: URL base pública para el portal de rescate si difiere de la API.
+
+> [!NOTE]
+> `VITE_API_URL` se configura como una **Variable de repositorio** (`vars.VITE_API_URL`) y **no como Secreto**, dado que las URLs de conexión pública del frontend y de endpoints de contingencia no representan credenciales secretas. El flujo fallará con un mensaje explícito si `VITE_API_URL` no está definida.
+
+#### 2. Prueba del Instalador sin Publicar (`workflow_dispatch`)
+Para verificar el empaquetado y descargar el instalador `.exe` sin crear una etiqueta Git ni publicar un release:
+1. En GitHub, ingrese a la pestaña **Actions > Desktop Release**.
+2. Haga clic en **Run workflow**.
+3. Mantenga la opción `publish: false` y ejecute el workflow.
+4. Al finalizar, el instalador generado estará disponible para descarga directa en la sección de **Artifacts** de la ejecución (`VetApp-Windows-Installer`).
+
+#### 3. Publicación Oficial de Release (Git Tag)
+Para publicar una versión oficial en GitHub Releases:
 1. Incrementar la versión en `apps/desktop/package.json` (ejemplo: `"version": "0.1.1"`).
 2. Crear y enviar la etiqueta Git correspondiente:
    ```bash
    git tag v0.1.1
    git push origin v0.1.1
    ```
-3. El workflow en GitHub Actions se ejecutará exclusivamente ante la subida de dicha etiqueta en un entorno `windows-latest`, validará que la etiqueta coincida exactamente con la versión de `package.json`, ejecutará la batería completa de pruebas y typechecks, y publicará automáticamente los binarios (`VetApp-Setup-0.1.1.exe`, `latest.yml`, `.blockmap`) en el apartado de Releases del repositorio.
+3. El workflow validará la coincidencia exacta de la etiqueta con `apps/desktop/package.json`, ejecutará la compilación de la app con `VITE_API_URL`, superará las quality gates y publicará los binarios (`VetApp-Setup-0.1.1.exe`, `latest.yml`, `.blockmap`) en GitHub Releases.
 
 ### 9.5 Verificación de Módulos Nativos y Hardware (Lector NFC)
 
 El módulo de comunicación por puerto serial (`serialport` / `@serialport/bindings-cpp`) está empaquetado fuera del archivo `.asar` mediante la directiva `asarUnpack`, cargando los binarios precompilados de Node-API (`npmRebuild: false`):
 - Al conectar una placa lectora ESP32 por USB, la aplicación autodetecta los chips CP210x o CH340 (`10C4:EA60` o `1A86:7523`) y los lista en la interfaz sin requerir compiladores de C++ ni dependencias externas.
+- Los manejadores de simulación (`nfc:simulate-tag`) permanecen deshabilitados en la aplicación empaquetada para prevenir inyecciones artificiales en entornos de producción, salvo activación explícita mediante la variable de desarrollo `VITE_DEV_TOOLS=true`.

@@ -29,6 +29,7 @@ import {
   Input,
 } from '../components/ui';
 import { formatPetAge } from '../utils/pet-age';
+import { resolveEmergencyUrl } from '../utils/emergency-url';
 import {
   PetIcon,
   TagIcon,
@@ -220,13 +221,7 @@ export const PatientFileScreen: React.FC<PatientFileScreenProps> = ({
     };
   }, [data?.publicCode, data?.pet, petId, isOriginClinic, petsService]);
 
-  const rawBase = (
-    (typeof process !== 'undefined' && (process.env?.PUBLIC_BASE_URL || process.env?.VITE_PUBLIC_URL || (process.env?.VITE_API_URL ? `${process.env.VITE_API_URL}/p` : undefined))) ||
-    (typeof import.meta !== 'undefined' && (import.meta.env?.PUBLIC_BASE_URL || import.meta.env?.VITE_PUBLIC_URL || (import.meta.env?.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/p` : undefined))) ||
-    'http://localhost:3000/p'
-  ).replace(/\/+$/, '');
-  const publicBaseUrl = rawBase.endsWith('/p') ? rawBase : `${rawBase}/p`;
-  const emergencyUrl = publicCode ? `${publicBaseUrl}/${publicCode}` : null;
+  const emergencyUrl = resolveEmergencyUrl(publicCode);
 
   const handleCopyEmergencyLink = async () => {
     if (!emergencyUrl) return;

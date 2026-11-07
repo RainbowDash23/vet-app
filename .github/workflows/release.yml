@@ -4,13 +4,20 @@ on:
   push:
     tags:
       - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Publicar release en GitHub (true) o solo compilar y subir artefacto (false)'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
 
 jobs:
   release-desktop:
-    name: Build & Publish Windows Desktop Installer
+    name: Build & Package Windows Desktop Installer
     runs-on: windows-latest
 
     steps:
@@ -29,7 +36,18 @@ jobs:
           node-version: '22'
           cache: 'pnpm'
 
+      - name: Validate VITE_API_URL repository variable
+        shell: bash
+        run: |
+          API_URL="${{ vars.VITE_API_URL }}"
+          if [ -z "$API_URL" ]; then
+            echo "::error::Variable de repositorio VITE_API_URL no está configurada en GitHub Actions (Settings > Secrets and variables > Actions > Variables). Configure la URL pública de la API antes de compilar el cliente empaquetado."
+            exit 1
+          fi
+          echo "VITE_API_URL configurada correctamente: $API_URL"
+
       - name: Validate tag version matches desktop package.json
+        if: ${{ github.event_name == 'push' }}
         shell: bash
         run: |
           TAG_NAME="${GITHUB_REF#refs/tags/}"
@@ -61,8 +79,35 @@ jobs:
       - name: Quality Gate - Desktop UI Tests
         run: pnpm --filter @vet-app/desktop run test:ui
 
-      - name: Build and Publish Desktop Installer
+      - name: Build Desktop application
+        env:
+          VITE_API_URL: ${{ vars.VITE_API_URL }}
+          VITE_PUBLIC_URL: ${{ vars.VITE_PUBLIC_URL }}
+        run: |
+          pnpm --filter @vet-app/desktop run build
+
+      - name: Package Desktop Installer
+        shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VITE_API_URL: ${{ vars.VITE_API_URL }}
+          VITE_PUBLIC_URL: ${{ vars.VITE_PUBLIC_URL }}
         run: |
-          pnpm --filter @vet-app/desktop exec electron-builder --win --publish always
+          if [ "${{ github.event_name == 'push' || inputs.publish == true }}" = "true" ]; then
+            echo "Publicando instalador en GitHub Releases..."
+            pnpm --filter @vet-app/desktop exec electron-builder --win --publish always
+          else
+            echo "Compilando instalador sin publicar (modo de prueba / artefacto)..."
+            pnpm --filter @vet-app/desktop exec electron-builder --win --publish never
+          fi
+
+      - name: Upload Installer Artifact
+        if: ${{ github.event_name == 'workflow_dispatch' && !inputs.publish }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: VetApp-Windows-Installer
+          path: |
+            apps/desktop/release/*.exe
+            apps/desktop/release/latest.yml
+            apps/desktop/release/*.blockmap
+          if-no-files-found: error

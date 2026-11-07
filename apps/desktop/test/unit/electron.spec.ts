@@ -336,6 +336,80 @@ describe('Electron Main & Preload Security Suite (T27 / RNF-2 / RNF-6 / RF-27 / 
       assert.strictEqual(detectedUid, '04A1B2C3');
     });
 
+    it('los handlers nfc:simulate-tag y nfc:simulate-hardware-tag deben deshabilitarse en la app empaquetada (isPackaged === true)', async () => {
+      const packagedApp = {
+        getVersion: () => '0.1.0',
+        isPackaged: true,
+      };
+
+      const originalDevTools = process.env.VITE_DEV_TOOLS;
+      const originalSim = process.env.ENABLE_SIMULATION;
+      delete process.env.VITE_DEV_TOOLS;
+      delete process.env.ENABLE_SIMULATION;
+
+      try {
+        registerIpcHandlers(serialManager, mockIpcMain as any, packagedApp as any);
+
+        const simulateTagHandler = mockIpcMain.handlers.get('nfc:simulate-tag');
+        const simulateHwHandler = mockIpcMain.handlers.get('nfc:simulate-hardware-tag');
+        assert.ok(simulateTagHandler);
+        assert.ok(simulateHwHandler);
+
+        let detectedUid = '';
+        serialManager.onTag((uid) => {
+          detectedUid = uid;
+        });
+
+        // Invoca simulación en app empaquetada
+        const resultTag = await simulateTagHandler({}, '04A1B2C3');
+        assert.strictEqual(resultTag.success, false);
+        assert.strictEqual(resultTag.emittedUid, '');
+        assert.ok(resultTag.error?.includes('deshabilitada'));
+        assert.strictEqual(detectedUid, '', 'No debe haberse emitido ningún tag al SerialManager');
+
+        const resultHw = await simulateHwHandler({}, '04A1B2C3');
+        assert.strictEqual(resultHw.success, false);
+        assert.strictEqual(resultHw.emittedUid, '');
+        assert.ok(resultHw.error?.includes('deshabilitada'));
+        assert.strictEqual(detectedUid, '', 'No debe haberse emitido ningún tag al SerialManager');
+      } finally {
+        if (originalDevTools !== undefined) process.env.VITE_DEV_TOOLS = originalDevTools;
+        if (originalSim !== undefined) process.env.ENABLE_SIMULATION = originalSim;
+      }
+    });
+
+    it('la simulación debe permitirse en app empaquetada si se define explícitamente VITE_DEV_TOOLS o ENABLE_SIMULATION', async () => {
+      const packagedApp = {
+        getVersion: () => '0.1.0',
+        isPackaged: true,
+      };
+
+      const originalDevTools = process.env.VITE_DEV_TOOLS;
+      process.env.VITE_DEV_TOOLS = 'true';
+
+      try {
+        registerIpcHandlers(serialManager, mockIpcMain as any, packagedApp as any);
+        const handler = mockIpcMain.handlers.get('nfc:simulate-tag');
+        assert.ok(handler);
+
+        let detectedUid = '';
+        serialManager.onTag((uid) => {
+          detectedUid = uid;
+        });
+
+        const result = await handler({}, '04DEADBEEF');
+        assert.strictEqual(result.success, true);
+        assert.strictEqual(result.emittedUid, '04DEADBEEF');
+        assert.strictEqual(detectedUid, '04DEADBEEF');
+      } finally {
+        if (originalDevTools !== undefined) {
+          process.env.VITE_DEV_TOOLS = originalDevTools;
+        } else {
+          delete process.env.VITE_DEV_TOOLS;
+        }
+      }
+    });
+
     it('el handler system:get-app-info debe retornar versión, plataforma y arquitectura sin secretos', async () => {
       registerIpcHandlers(serialManager, mockIpcMain as any, mockApp as any);
       const handler = mockIpcMain.handlers.get('system:get-app-info');
