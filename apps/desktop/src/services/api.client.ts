@@ -49,7 +49,7 @@ export class ApiClient {
       (typeof nodeProcess !== 'undefined' && nodeProcess.env?.VITE_API_URL) ||
       'http://localhost:3000';
 
-    this.baseUrl = (options?.baseUrl || defaultUrl).replace(/\/$/, '');
+    this.baseUrl = (options?.baseUrl || defaultUrl).replace(/\/+$/, '');
     this.fetchFn = options?.fetchFn || globalThis.fetch.bind(globalThis);
   }
 

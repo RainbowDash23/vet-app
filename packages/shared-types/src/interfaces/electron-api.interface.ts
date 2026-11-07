@@ -21,6 +21,24 @@ export interface ConnectPortResult {
   error?: string;
 }
 
+export type UpdateState =
+  | 'checking'
+  | 'available'
+  | 'not-available'
+  | 'downloading'
+  | 'downloaded'
+  | 'error'
+  | 'idle';
+
+export interface UpdateStatusPayload {
+  state: UpdateState;
+  percent?: number;
+  version?: string;
+  currentVersion?: string;
+  message?: string;
+  error?: string;
+}
+
 export interface ElectronAPI {
   onTagDetected: (callback: (uid: string) => void) => () => void;
   onHardwareStatusChange?: (callback: (status: HardwareStatus) => void) => () => void;
@@ -30,6 +48,9 @@ export interface ElectronAPI {
   getAppInfo?: () => Promise<{ version: string; platform: string; arch: string }>;
   listSerialPorts?: () => Promise<SerialPortInfo[]>;
   connectSerialPort?: (portPath: string) => Promise<ConnectPortResult>;
+  onUpdaterStatus?: (callback: (status: UpdateStatusPayload) => void) => () => void;
+  restartAndInstallUpdate?: () => Promise<void>;
+  skipUpdate?: () => Promise<void>;
 }
 
 declare global {

@@ -318,3 +318,56 @@ En entornos de producción tras un proxy inverso (como Render), el limitador de 
    curl -H "X-Forwarded-For: 203.0.113.195" https://vet-app-api.onrender.com/health/ready
    ```
    Revise en los logs del servidor que la IP registrada corresponda a su IP pública real y **no** a la IP falsificada `203.0.113.195`.
+
+---
+
+## 9. Aplicación de Escritorio (Desktop) y Distribución
+
+VetApp incluye un cliente de escritorio nativo para Windows empaquetado con **Electron** y distribuido mediante instalador **NSIS** con soporte de actualizaciones automáticas vía **GitHub Releases**.
+
+### 9.1 Compilación Local del Instalador de Windows
+
+Para generar el instalador de Windows (`.exe`):
+
+```bash
+# Compilar con la URL de API por defecto (http://localhost:3000)
+pnpm --filter @vet-app/desktop package:dist
+
+# Compilar inyectando la URL de producción de la API (sin secretos ni URLs fijas en código)
+VITE_API_URL=https://vet-app-api.onrender.com pnpm --filter @vet-app/desktop package:dist
+```
+
+El instalador se genera en `apps/desktop/release/VetApp-Setup-<version>.exe` junto con el archivo de manifiesto `latest.yml`.
+
+### 9.2 Instalación y Advertencia de Windows SmartScreen
+
+El instalador de VetApp está configurado con privilegios de usuario estándar (`perMachine: false`, `asInvoker`, sin elevación de permisos de administrador):
+1. **Doble clic en el instalador:** `VetApp-Setup-<version>.exe` se instala de forma silenciosa/un-clic en el directorio de usuario (`%LOCALAPPDATA%\Programs\VetApp`).
+2. **Advertencia de Microsoft Defender SmartScreen:** Al tratarse de un binario autocompilado o de código abierto sin un certificado comercial Extended Validation (EV Code Signing), Windows mostrará la pantalla azul de aviso *"Windows protegió su PC"* (*Windows protected your PC*).
+   - Para continuar con la instalación, haga clic en **"Más información"** (*More info*).
+   - A continuación, presione el botón **"Ejecutar de todas formas"** (*Run anyway*).
+3. **Inicio de la aplicación:** Se creará un acceso directo en el Escritorio y en el Menú Inicio con el nombre `VetApp`.
+
+### 9.3 Actualizaciones Automáticas (Auto-Updater con Pantalla Splash)
+
+- **Proveedor:** GitHub Releases con repositorio público (`RainbowDash23/vet-app`).
+- **Comportamiento al iniciar:** Se despliega una ventana splash sobria y oscura (estilo Discord) que consulta el canal de releases de GitHub:
+  - Si hay una nueva versión disponible, descarga la actualización en segundo plano mostrando el progreso porcentual y solicita reiniciar para aplicar la actualización.
+  - Si la aplicación está al día, si ocurre un error de red o si la comprobación tarda más de 10 segundos (timeout de seguridad), la ventana de carga se cierra suavemente y se presenta de inmediato la pantalla principal.
+- **Seguridad en actualizaciones:** No se permiten versiones preliminares (`allowPrerelease: false`) ni retrocesos de versión no controlados (`allowDowngrade: false`). En modo de desarrollo (`NODE_ENV !== 'production'`), el auto-updater se desactiva automáticamente.
+
+### 9.4 Procedimiento de Lanzamiento de una Nueva Versión (Release)
+
+El flujo de integración continua `.github/workflows/release.yml` automatiza la compilación y publicación de releases oficiales:
+1. Incrementar la versión en `apps/desktop/package.json` (ejemplo: `"version": "0.1.1"`).
+2. Crear y enviar la etiqueta Git correspondiente:
+   ```bash
+   git tag v0.1.1
+   git push origin v0.1.1
+   ```
+3. El workflow en GitHub Actions se ejecutará exclusivamente ante la subida de dicha etiqueta en un entorno `windows-latest`, validará que la etiqueta coincida exactamente con la versión de `package.json`, ejecutará la batería completa de pruebas y typechecks, y publicará automáticamente los binarios (`VetApp-Setup-0.1.1.exe`, `latest.yml`, `.blockmap`) en el apartado de Releases del repositorio.
+
+### 9.5 Verificación de Módulos Nativos y Hardware (Lector NFC)
+
+El módulo de comunicación por puerto serial (`serialport` / `@serialport/bindings-cpp`) está empaquetado fuera del archivo `.asar` mediante la directiva `asarUnpack`, cargando los binarios precompilados de Node-API (`npmRebuild: false`):
+- Al conectar una placa lectora ESP32 por USB, la aplicación autodetecta los chips CP210x o CH340 (`10C4:EA60` o `1A86:7523`) y los lista en la interfaz sin requerir compiladores de C++ ni dependencias externas.

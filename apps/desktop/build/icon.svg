@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#151922"/>
+      <stop offset="100%" stop-color="#0c0e12"/>
+    </linearGradient>
+  </defs>
+  <!-- Background squircle -->
+  <rect x="16" y="16" width="480" height="480" rx="108" ry="108" fill="url(#bgGrad)" stroke="#27272a" stroke-width="12"/>
+  
+  <!-- Pet Paw Icon Geometry centered and scaled -->
+  <g transform="translate(64, 64) scale(16)" fill="#0ea5e9">
+    <!-- Outer toe pads -->
+    <circle cx="7" cy="8" r="2.2" />
+    <circle cx="17" cy="8" r="2.2" />
+    <!-- Inner toe pads -->
+    <circle cx="10.2" cy="4.5" r="1.7" />
+    <circle cx="13.8" cy="4.5" r="1.7" />
+    <!-- Main center pad -->
+    <path d="M12 10.8c-3.2 0-5.3 1.8-5.3 4.2 0 2.1 1.6 3.6 3.2 4.6 1.1 .7 3.1 .7 4.2 0 1.6-1 3.2-2.5 3.2-4.6 0-2.4-2.1-4.2-5.3-4.2z" />
+  </g>
+</svg>

@@ -78,7 +78,7 @@ async function bootstrap(): Promise<void> {
     });
   } else {
     // En desarrollo/testing se permite lista explícita configurable o valores locales por defecto.
-    // NOTA: Los orígenes 'file://' y 'null' quedan reservados para la fase del instalador de escritorio y pruebas locales.
+    // Endurecimiento de CORS: se utiliza el protocolo registrado seguro 'app://vetapp', eliminando 'file://' y 'null'.
     if (corsOrigin && corsOrigin !== '*') {
       const origins = corsOrigin.includes(',')
         ? corsOrigin.split(',').map((o) => o.trim())
@@ -98,8 +98,7 @@ async function bootstrap(): Promise<void> {
           'http://127.0.0.1:5173',
           'http://localhost:3000',
           'http://127.0.0.1:3000',
-          'file://',
-          'null',
+          'app://vetapp',
         ],
         credentials: true,
       });

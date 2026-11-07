@@ -12,6 +12,7 @@
     "dev:desktop": "pnpm --filter @vet-app/desktop dev",
     "dev:electron": "pnpm --filter @vet-app/desktop dev:electron",
     "build:desktop": "pnpm --filter @vet-app/desktop build",
+    "package:desktop": "pnpm --filter @vet-app/desktop package:dist",
     "build": "pnpm -r build",
     "typecheck": "pnpm --filter @vet-app/shared-types build && pnpm --filter @vet-app/api exec tsc --noEmit && pnpm --filter @vet-app/desktop exec tsc --noEmit",
     "test": "pnpm --filter @vet-app/api test && pnpm --filter @vet-app/desktop test",

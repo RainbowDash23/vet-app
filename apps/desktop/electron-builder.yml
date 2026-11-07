@@ -1,0 +1,43 @@
+appId: com.vetapp.desktop
+productName: VetApp
+copyright: Copyright © 2026 VetApp
+
+directories:
+  output: release
+  buildResources: build
+
+files:
+  - dist/**/*
+  - dist-electron/**/*
+  - package.json
+
+asar: true
+asarUnpack:
+  - "**/node_modules/serialport/**"
+  - "**/node_modules/@serialport/**"
+npmRebuild: false
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: build/icon.ico
+  requestedExecutionLevel: asInvoker
+
+nsis:
+  artifactName: "${productName}-Setup-${version}.${ext}"
+  oneClick: true
+  perMachine: false
+  allowElevation: false
+  allowToChangeInstallationDirectory: false
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: VetApp
+  uninstallDisplayName: VetApp
+  deleteAppDataOnUninstall: false
+
+publish:
+  provider: github
+  owner: RainbowDash23
+  repo: vet-app

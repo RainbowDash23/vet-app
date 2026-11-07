@@ -2,6 +2,9 @@ import * as path from 'path';
 import electron from 'electron';
 import type { BrowserWindow as BrowserWindowInstance, BrowserWindowConstructorOptions, IpcMain, App } from 'electron';
 import { SerialManager } from './serial.manager.ts';
+import { APP_SCHEME_PRIVILEGES, registerAppProtocol } from './custom-protocol.ts';
+import { UpdaterManager } from './updater.manager.ts';
+import type { IAutoUpdater } from './updater.manager.ts';
 import type { HardwareStatus } from '@vet-app/shared-types';
 
 const currentDir = typeof __dirname !== 'undefined' ? __dirname : path.resolve('electron');
@@ -13,6 +16,24 @@ const electronModule =
 const app = electronModule?.app;
 const BrowserWindow = electronModule?.BrowserWindow;
 const ipcMain = electronModule?.ipcMain;
+const protocol = electronModule?.protocol;
+
+function resolveAutoUpdater(): IAutoUpdater | null {
+  try {
+    if (!app || typeof app.whenReady !== 'function') {
+      return null;
+    }
+    const updaterMod = require('electron-updater');
+    return (updaterMod?.autoUpdater ?? updaterMod?.default?.autoUpdater ?? null) as IAutoUpdater | null;
+  } catch {
+    return null;
+  }
+}
+
+// Registro de esquemas con privilegios antes de que app esté lista (Requisito estricto de Electron)
+if (protocol && typeof protocol.registerSchemesAsPrivileged === 'function') {
+  protocol.registerSchemesAsPrivileged([APP_SCHEME_PRIVILEGES]);
+}
 
 /**
  * Configuración estricta de seguridad y dimensiones de la ventana principal (RNF-6).
@@ -32,8 +53,34 @@ export const DEFAULT_WINDOW_OPTIONS: BrowserWindowConstructorOptions = {
   },
 };
 
+/**
+ * Configuración de la ventana de carga / splash tipo Discord para actualizaciones.
+ */
+export const DEFAULT_SPLASH_OPTIONS: BrowserWindowConstructorOptions = {
+  width: 420,
+  height: 480,
+  resizable: false,
+  frame: false,
+  center: true,
+  title: 'VetApp',
+  backgroundColor: '#0c0e12',
+  webPreferences: {
+    preload: path.join(currentDir, 'preload.js'),
+    nodeIntegration: false,
+    contextIsolation: true,
+    sandbox: true,
+  },
+};
+
 let mainWindow: BrowserWindowInstance | null = null;
+let splashWindow: BrowserWindowInstance | null = null;
+
 export const serialManager = new SerialManager();
+export const updaterManager = new UpdaterManager({
+  updater: resolveAutoUpdater() ?? undefined,
+  isPackaged: Boolean(app?.isPackaged),
+  currentVersion: app?.getVersion ? app.getVersion() : '0.1.0',
+});
 
 export function getMainWindow(): BrowserWindowInstance | null {
   return mainWindow;
@@ -41,6 +88,14 @@ export function getMainWindow(): BrowserWindowInstance | null {
 
 export function setMainWindow(win: BrowserWindowInstance | null): void {
   mainWindow = win;
+}
+
+export function getSplashWindow(): BrowserWindowInstance | null {
+  return splashWindow;
+}
+
+export function setSplashWindow(win: BrowserWindowInstance | null): void {
+  splashWindow = win;
 }
 
 export function createWindow(customOptions?: BrowserWindowConstructorOptions): BrowserWindowInstance {
@@ -61,7 +116,8 @@ export function createWindow(customOptions?: BrowserWindowConstructorOptions): B
     void mainWindow.loadURL('http://localhost:5173');
     mainWindow.webContents.openDevTools({ mode: 'detach' });
   } else {
-    void mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
+    // Servicio seguro vía protocolo registrado app://vetapp sin usar file:// ni null (RNF-6)
+    void mainWindow.loadURL('app://vetapp/index.html');
   }
 
   mainWindow.on('closed', () => {
@@ -69,6 +125,27 @@ export function createWindow(customOptions?: BrowserWindowConstructorOptions): B
   });
 
   return mainWindow;
+}
+
+export function createSplashWindow(customOptions?: BrowserWindowConstructorOptions): BrowserWindowInstance {
+  const options: BrowserWindowConstructorOptions = {
+    ...DEFAULT_SPLASH_OPTIONS,
+    ...customOptions,
+    webPreferences: {
+      ...DEFAULT_SPLASH_OPTIONS.webPreferences,
+      ...customOptions?.webPreferences,
+    },
+  };
+
+  splashWindow = new BrowserWindow(options);
+  const splashPath = path.join(currentDir, 'splash.html');
+  void splashWindow.loadFile(splashPath);
+
+  splashWindow.on('closed', () => {
+    splashWindow = null;
+  });
+
+  return splashWindow;
 }
 
 /**
@@ -106,6 +183,7 @@ export function registerIpcHandlers(
   manager: SerialManager = serialManager,
   ipc: IpcMain = ipcMain,
   appInstance: App = app,
+  updater: UpdaterManager = updaterManager,
 ): void {
   if (!ipc) {
     return;
@@ -151,17 +229,55 @@ export function registerIpcHandlers(
       arch: process.arch,
     };
   });
+
+  // Manejadores IPC para el gestor de auto-actualizaciones
+  ipc.handle('updater:restart-and-install', () => {
+    updater.restartAndInstall();
+    return { success: true };
+  });
+
+  ipc.handle('updater:skip', () => {
+    updater.skip();
+    return { success: true };
+  });
+
+  ipc.handle('updater:get-status', () => {
+    return updater.getStatusPayload();
+  });
 }
 
 // Inicialización del ciclo de vida de Electron cuando se ejecuta dentro del runtime
 if (app && typeof app.whenReady === 'function') {
   app.whenReady().then(() => {
-    registerIpcHandlers(serialManager, ipcMain, app);
-    createWindow();
+    registerAppProtocol(protocol, path.join(currentDir, '../dist'));
+    registerIpcHandlers(serialManager, ipcMain, app, updaterManager);
 
-    // Inicia enlace serial y escucha eventos hacia MainWindow
-    void serialManager.connect();
-    setupSerialEvents(serialManager, () => mainWindow);
+    const isPackaged = Boolean(app.isPackaged);
+
+    const launchMainApp = () => {
+      createWindow();
+      if (splashWindow && !splashWindow.isDestroyed()) {
+        splashWindow.close();
+      }
+      void serialManager.connect();
+      setupSerialEvents(serialManager, () => mainWindow);
+    };
+
+    if (isPackaged) {
+      const splash = createSplashWindow();
+      updaterManager.start(
+        () => {
+          launchMainApp();
+        },
+        (payload) => {
+          if (splash && !splash.isDestroyed()) {
+            splash.webContents.send('updater:status-changed', payload);
+          }
+        },
+      );
+    } else {
+      launchMainApp();
+    }
 
     app.on('activate', () => {
       if (BrowserWindow && BrowserWindow.getAllWindows().length === 0) {

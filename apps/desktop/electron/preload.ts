@@ -1,6 +1,6 @@
 import electron from 'electron';
 import type { IpcRenderer, IpcRendererEvent } from 'electron';
-import type { ElectronAPI, HardwareStatus, SerialPortInfo, ConnectPortResult } from '@vet-app/shared-types';
+import type { ElectronAPI, HardwareStatus, SerialPortInfo, ConnectPortResult, UpdateStatusPayload } from '@vet-app/shared-types';
 
 export interface AppInfo {
   version: string;
@@ -8,7 +8,7 @@ export interface AppInfo {
   arch: string;
 }
 
-export type { ElectronAPI, HardwareStatus, SerialPortInfo, ConnectPortResult };
+export type { ElectronAPI, HardwareStatus, SerialPortInfo, ConnectPortResult, UpdateStatusPayload };
 
 const electronModule =
   (electron as unknown as { default?: typeof import('electron') })?.default ??
@@ -66,6 +66,23 @@ export function createElectronApi(ipc: IpcRenderer): ElectronAPI & {
 
     connectSerialPort: (portPath: string): Promise<ConnectPortResult> => {
       return ipc.invoke('serial:connect', portPath);
+    },
+
+    onUpdaterStatus: (callback: (status: UpdateStatusPayload) => void): (() => void) => {
+      const subscription = (_event: IpcRendererEvent, payload: UpdateStatusPayload) => callback(payload);
+      ipc.on('updater:status-changed', subscription);
+
+      return () => {
+        ipc.removeListener('updater:status-changed', subscription);
+      };
+    },
+
+    restartAndInstallUpdate: (): Promise<void> => {
+      return ipc.invoke('updater:restart-and-install');
+    },
+
+    skipUpdate: (): Promise<void> => {
+      return ipc.invoke('updater:skip');
     },
   };
 }
