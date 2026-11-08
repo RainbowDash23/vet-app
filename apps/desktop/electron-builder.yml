@@ -27,15 +27,24 @@ win:
 
 nsis:
   artifactName: "${productName}-Setup-${version}.${ext}"
-  oneClick: true
+  oneClick: false
   perMachine: false
   allowElevation: false
-  allowToChangeInstallationDirectory: false
-  createDesktopShortcut: true
+  allowToChangeInstallationDirectory: true
+  runAfterFinish: true
+  installerLanguages:
+    - es_ES
+  language: 1034
+  displayLanguageSelector: false
+  createDesktopShortcut: false
   createStartMenuShortcut: true
   shortcutName: VetApp
   uninstallDisplayName: VetApp
   deleteAppDataOnUninstall: false
+  installerSidebar: build/installerSidebar.bmp
+  uninstallerSidebar: build/uninstallerSidebar.bmp
+  installerHeader: build/installerHeader.bmp
+  include: build/installer.nsh
 
 publish:
   provider: github

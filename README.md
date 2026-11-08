@@ -337,26 +337,136 @@ pnpm --filter @vet-app/desktop package:dist
 VITE_API_URL=https://TU-SERVICIO.onrender.com pnpm --filter @vet-app/desktop package:dist
 ```
 
-El instalador se genera en `apps/desktop/release/VetApp-Setup-<version>.exe` junto con el archivo de manifiesto `latest.yml`.
+> [!TIP]
+> **Compilación en `C:\vetapp-release` contra bloqueos en Windows (EBUSY / EPERM):**
+> En entornos de desarrollo sobre Windows con indexadores, antivirus o centinelas de archivos activos (como Windows Defender o el watcher de Vite/VSCode), el empaquetado directo sobre `apps/desktop/release` puede fallar ocasionalmente por bloqueos exclusivos de archivos (`EBUSY: resource busy or locked`). Para evitar este problema de concurrencia, compile dirigiendo la salida a una carpeta dedicada fuera del árbol de trabajo del monorepo:
+> ```bash
+> pnpm --filter @vet-app/desktop exec electron-builder --win --publish never --config.directories.output=C:\vetapp-release
+> ```
+> El instalador se generará limpiamente en `C:\vetapp-release\VetApp-Setup-<version>.exe` junto con el archivo de manifiesto `latest.yml`.
 
-### 9.2 Instalación y Advertencia de Windows SmartScreen
+### 9.2 Asistente de Instalación por Pasos (NSIS Wizard)
 
-El instalador de VetApp está configurado con privilegios de usuario estándar (`perMachine: false`, `asInvoker`, sin elevación de permisos de administrador):
-1. **Doble clic en el instalador:** `VetApp-Setup-<version>.exe` se instala de forma silenciosa/un-clic en el directorio de usuario (`%LOCALAPPDATA%\Programs\VetApp`).
-2. **Advertencia de Microsoft Defender SmartScreen:** Al tratarse de un binario autocompilado o de código abierto sin un certificado comercial Extended Validation (EV Code Signing), Windows mostrará la pantalla azul de aviso *"Windows protegió su PC"* (*Windows protected your PC*).
-   - Para continuar con la instalación, haga clic en **"Más información"** (*More info*).
-   - A continuación, presione el botón **"Ejecutar de todas formas"** (*Run anyway*).
-3. **Inicio de la aplicación:** Se creará un acceso directo en el Escritorio y en el Menú Inicio con el nombre `VetApp`.
+El empaquetado utiliza un asistente interactivo por pasos (**NSIS**) sobrio y en español (`language: 1034`, `es_ES`), configurado para ejecutarse estrictamente con privilegios de usuario estándar (`perMachine: false`, `allowElevation: false`, sin elevación de permisos ni prompts de Control de Cuentas de Usuario / UAC):
 
-### 9.3 Actualizaciones Automáticas (Auto-Updater con Pantalla Splash)
+1. **Página de Bienvenida:** Muestra la carátula gráfica sobria lateral (`installerSidebar.bmp` 164x314) con el logo e identidad visual de VetApp.
+2. **Selección de Carpeta de Destino:** Permite al usuario seleccionar el directorio de instalación (`allowToChangeInstallationDirectory: true`), sugiriendo por defecto la ruta de usuario `%LOCALAPPDATA%\Programs\VetApp`.
+3. **Página de Opciones Adicionales (`build/installer.nsh`):**
+   - **Crear acceso directo en el escritorio:** Casilla activada por defecto. Genera un enlace directo con icono y modelo AUMI (`com.vetapp.desktop`).
+   - **Iniciar VetApp al arrancar Windows:** Casilla desactivada por defecto. Si el usuario la activa, registra la clave de inicio automático en `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\VetApp`.
+4. **Página de Progreso:** Extrae los archivos de la aplicación y descomprime los módulos nativos seriales (`serialport`).
+5. **Página de Finalización:** Permite finalizar la instalación e incluye la casilla interactiva *"Ejecutar VetApp"* (`runAfterFinish: true`), permitiendo iniciar la aplicación de inmediato si el usuario lo desea.
+
+> [!NOTE]
+> **Página de Licencia:** La página de términos de licencia solo se inserta automáticamente si existe un archivo formal `LICENSE` en la raíz del repositorio. Al tratarse de un proyecto que no dispone de archivo de licencia, la página se omite deliberadamente para no generar textos jurídicos sintéticos.
+
+### 9.3 Desinstalador Interactivo y Limpieza del Sistema
+
+VetApp incluye un desinstalador interactivo configurable (`build/installer.nsh`):
+1. **Confirmación de Desinstalación:** Presenta al usuario una pantalla clara solicitando confirmación para retirar la aplicación del equipo.
+2. **Opción de Retención de Datos:** Incluye la casilla *"Eliminar datos de usuario y configuración local"* (desactivada por defecto) para preservar o purgar directorios locales `%APPDATA%\VetApp`, `%APPDATA%\vet-app` y `%LOCALAPPDATA%\VetApp`.
+3. **Limpieza Completa de Huella en el Sistema:**
+   - Elimina los accesos directos creados en el Escritorio y en el Menú Inicio (`$SMPROGRAMS\VetApp`).
+   - Suprime de forma incondicional la clave de inicio automático en el registro de Windows (`HKCU\Software\Microsoft\Windows\CurrentVersion\Run\VetApp`).
+
+### 9.4 Extensibilidad: Cómo Añadir una Opción Nueva al Instalador
+
+Para incorporar una nueva opción de configuración durante el proceso de instalación (por ejemplo, habilitar telemetría o registrar un protocolo URL personalizado):
+
+1. **Definir la variable de estado y control en `apps/desktop/build/installer.nsh`:**
+   ```nsis
+   !ifndef BUILD_UNINSTALLER
+   Var /GLOBAL CheckboxMiOpcion
+   Var /GLOBAL MiOpcionState
+
+   !macro customInit
+     StrCpy $MiOpcionState "1" ; "1" para activada por defecto, "0" para desactivada
+   !macroend
+   ```
+
+2. **Añadir el control visual en la página personalizada (`customPageAfterChangeDir`):**
+   ```nsis
+   !macro customPageAfterChangeDir
+     Function CustomOptionsPageCreate
+       ; ...
+       ${NSD_CreateCheckbox} 10u 60u 100% 12u "Habilitar registro extendido de eventos"
+       Pop $CheckboxMiOpcion
+       ${NSD_SetState} $CheckboxMiOpcion $MiOpcionState
+       ; ...
+     FunctionEnd
+
+     Function CustomOptionsPageLeave
+       ${NSD_GetState} $CheckboxMiOpcion $MiOpcionState
+     FunctionEnd
+   !macroend
+   ```
+
+3. **Persistir la opción en el Registro de Windows en `customInstall`:**
+   ```nsis
+   !macro customInstall
+     ${If} $MiOpcionState == "1"
+       WriteRegStr HKCU "Software\VetApp" "ExtendedLogging" "1"
+     ${Else}
+       WriteRegStr HKCU "Software\VetApp" "ExtendedLogging" "0"
+     ${EndIf}
+   !macroend
+   ```
+
+4. **Consumir la opción desde la aplicación Electron:**
+   En el proceso principal (`apps/desktop/electron/main.ts`), verifique la configuración leyendo el registro de Windows de usuario mediante comandos de PowerShell o bibliotecas nativas de lectura de claves HKCU sin requerir privilegios de administrador:
+   ```typescript
+   import { execSync } from 'node:child_process';
+   function isExtendedLoggingEnabled(): boolean {
+     try {
+       const stdout = execSync('reg query HKCU\\Software\\VetApp /v ExtendedLogging').toString();
+       return stdout.includes('0x1') || stdout.includes('1');
+     } catch {
+       return false;
+     }
+   }
+   ```
+
+### 9.5 Advertencia de Microsoft Defender SmartScreen
+
+Al no incorporar un certificado comercial de firma de código con Validación Extendida (EV Code Signing), Microsoft Defender SmartScreen mostrará una advertencia preventiva en la primera ejecución:
+- **Pantalla azul de aviso:** *"Windows protegió su PC"* (*Windows protected your PC*).
+- **Procedimiento de desbloqueo:**
+  1. Haga clic en el enlace **"Más información"** (*More info*).
+  2. Presione el botón **"Ejecutar de todas formas"** (*Run anyway*).
+- Al ser una instalación confinada a nivel de usuario (`perMachine: false`, `asInvoker`), la aplicación no altera directorios protegidos del sistema (`Program Files` o `HKLM`) ni requiere privilegios administrativos.
+
+### 9.6 Lista de Verificación Manual (Checklist de Validación)
+
+Para auditorías manuales previas al lanzamiento en entornos Windows reales:
+
+#### A. Verificación del Asistente de Instalación (Instalador):
+- [ ] **Página de Bienvenida:** Se visualiza la ilustración lateral sobria (`installerSidebar.bmp`) con el logo de VetApp y texto de bienvenida en español.
+- [ ] **Página de Selección de Carpeta:** La ruta por defecto apunta a `%LOCALAPPDATA%\Programs\VetApp`. El botón *Examinar* permite cambiar la ruta a una carpeta secundaria de usuario.
+- [ ] **Página de Opciones Adicionales:**
+  - Casilla *"Crear acceso directo en el escritorio"* está marcada por defecto.
+  - Casilla *"Iniciar VetApp al arrancar Windows"* está desmarcada por defecto.
+  - Al marcar el inicio automático, se comprueba que tras finalizar la instalación la clave `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\VetApp` apunta a `"$INSTDIR\VetApp.exe"`.
+- [ ] **Página de Progreso:** La barra de avance completa la copia de archivos sin diálogos de error de makensis ni prompts UAC.
+- [ ] **Página de Finalización:** Se muestra la casilla *"Ejecutar VetApp"*. Al pulsar *Terminar* con la casilla marcada, VetApp arranca de forma inmediata.
+
+#### B. Verificación del Asistente de Desinstalación (Desinstalador):
+- [ ] **Acceso:** Iniciar el desinstalador desde *Configuración > Aplicaciones instaladas > VetApp > Desinstalar* o ejecutando `Uninstall VetApp.exe`.
+- [ ] **Página de Confirmación y Opciones:** Se despliega la barra lateral `uninstallerSidebar.bmp` y el texto de confirmación en español.
+- [ ] **Casilla de Datos de Usuario:** La opción *"Eliminar datos de usuario y configuración local"* aparece desmarcada por defecto. Si se marca, elimina las carpetas de datos de sesión en `%APPDATA%\VetApp`.
+- [ ] **Limpieza de Accesos Directos:** Tras desinstalar, el acceso directo en el Escritorio y en la carpeta del Menú Inicio desaparecen.
+- [ ] **Limpieza del Registro:** El valor `VetApp` en `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` queda eliminado.
+
+### 9.7 Actualizaciones Automáticas (Auto-Updater con Pantalla Splash)
 
 - **Proveedor:** GitHub Releases con repositorio público (`RainbowDash23/vet-app`).
+- **Comportamiento en segundo plano:**
+  - Las actualizaciones automáticas invocan `quitAndInstall(true, true)` (`isSilent: true`, `isForceRunAfter: true`), aplicando el parche sin mostrar el asistente de instalación interactivo y preservando la carpeta elegida por el usuario y su estado de inicio automático.
 - **Comportamiento al iniciar:** Se despliega una ventana splash sobria y oscura (estilo Discord) que consulta el canal de releases de GitHub:
   - Si hay una nueva versión disponible, descarga la actualización en segundo plano mostrando el progreso porcentual y solicita reiniciar para aplicar la actualización.
   - Si la aplicación está al día, si ocurre un error de red o si la comprobación tarda más de 10 segundos (timeout de seguridad), la ventana de carga se cierra suavemente y se presenta de inmediato la pantalla principal.
 - **Seguridad en actualizaciones:** No se permiten versiones preliminares (`allowPrerelease: false`) ni retrocesos de versión no controlados (`allowDowngrade: false`). En modo de desarrollo (`NODE_ENV !== 'production'`), el auto-updater se desactiva automáticamente.
 
-### 9.4 Procedimiento de Lanzamiento y CI en GitHub Actions
+### 9.8 Procedimiento de Lanzamiento y CI en GitHub Actions
 
 El flujo [`.github/workflows/release.yml`](.github/workflows/release.yml) automatiza la compilación del frontend, empaquetado del instalador y publicación en GitHub:
 

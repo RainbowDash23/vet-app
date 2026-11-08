@@ -13,6 +13,7 @@ class MockAutoUpdater extends EventEmitter implements IAutoUpdater {
 
   public checkCalls = 0;
   public quitAndInstallCalls = 0;
+  public lastQuitAndInstallArgs: { isSilent?: boolean; isForceRunAfter?: boolean } | null = null;
   public simulateCheckError: Error | null = null;
 
   public async checkForUpdates(): Promise<unknown> {
@@ -24,8 +25,9 @@ class MockAutoUpdater extends EventEmitter implements IAutoUpdater {
     return {};
   }
 
-  public quitAndInstall(): void {
+  public quitAndInstall(isSilent?: boolean, isForceRunAfter?: boolean): void {
     this.quitAndInstallCalls++;
+    this.lastQuitAndInstallArgs = { isSilent, isForceRunAfter };
   }
 }
 
@@ -181,9 +183,32 @@ describe('Gestor de Actualizaciones Automáticas (updater.manager.ts)', () => {
     mockUpdater.emit('update-downloaded', { version: '0.2.0' });
     assert.strictEqual(manager.getState(), 'downloaded');
 
-    // 4. Reiniciar e instalar
+    // 4. Reiniciar e instalar en modo silencioso para no mostrar el asistente
     manager.restartAndInstall();
     assert.strictEqual(mockUpdater.quitAndInstallCalls, 1);
+    assert.strictEqual(mockUpdater.lastQuitAndInstallArgs?.isSilent, true, 'quitAndInstall debe ejecutarse con isSilent: true');
+    assert.strictEqual(mockUpdater.lastQuitAndInstallArgs?.isForceRunAfter, true, 'quitAndInstall debe ejecutarse con isForceRunAfter: true');
+  });
+
+  it('restartAndInstall debe forzar modo silencioso (isSilent: true, isForceRunAfter: true) para evitar asistente NSIS en actualizaciones', () => {
+    const manager = new UpdaterManager({
+      updater: mockUpdater,
+      isPackaged: true,
+      currentVersion: '0.1.0',
+      logger: { info: () => {}, error: () => {}, warn: () => {} },
+    });
+
+    manager.start(() => {});
+    mockUpdater.emit('update-available', { version: '1.0.0' });
+    mockUpdater.emit('update-downloaded', { version: '1.0.0' });
+
+    manager.restartAndInstall();
+
+    assert.strictEqual(mockUpdater.quitAndInstallCalls, 1);
+    assert.deepStrictEqual(mockUpdater.lastQuitAndInstallArgs, {
+      isSilent: true,
+      isForceRunAfter: true,
+    });
   });
 
   it('skip() debe invocar onReady para continuar sin actualizar', () => {

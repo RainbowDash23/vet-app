@@ -187,7 +187,9 @@ export class UpdaterManager {
 
   public restartAndInstall(): void {
     if (this.updater && this.currentState === 'downloaded') {
-      this.updater.quitAndInstall(false, true);
+      // isSilent: true para actualización desatendida sin asistente
+      // isForceRunAfter: true para reinicio inmediato automático
+      this.updater.quitAndInstall(true, true);
     } else {
       this.triggerReady();
     }
