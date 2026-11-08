@@ -483,23 +483,25 @@ Antes de ejecutar el pipeline de release, configure la variable de repositorio p
 > `VITE_API_URL` se configura como una **Variable de repositorio** (`vars.VITE_API_URL`) y **no como Secreto**, dado que las URLs de conexión pública del frontend y de endpoints de contingencia no representan credenciales secretas. El flujo fallará con un mensaje explícito si `VITE_API_URL` no está definida.
 
 #### 2. Prueba del Instalador sin Publicar (`workflow_dispatch`)
-Para verificar el empaquetado y descargar el instalador `.exe` sin crear una etiqueta Git ni publicar un release:
+Para verificar el empaquetado y descargar el instalador `.exe` desde cualquier rama de desarrollo sin crear una etiqueta Git ni publicar un release:
 1. En GitHub, ingrese a la pestaña **Actions > Desktop Release**.
-2. Haga clic en **Run workflow**.
-3. Mantenga la opción `publish: false` y ejecute el workflow.
-4. Al finalizar, el instalador generado estará disponible para descarga directa en la sección de **Artifacts** de la ejecución (`VetApp-Windows-Installer`).
+2. Haga clic en el menú desplegable **Run workflow**.
+3. En el selector **Use workflow from**, elija la rama deseada (por ejemplo `fix/release-gates` o `main`).
+4. En la opción **publish**, mantenga el valor por defecto en `false` y haga clic en el botón verde **Run workflow**.
+5. El flujo ejecutará las quality gates específicas del instalador de escritorio (typecheck de shared-types y desktop, tests unitarios del desktop y pruebas UI), compilará la aplicación inyectando `VITE_API_URL`, generará el instalador NSIS en modo local (`publish never`) y lo publicará como artefacto descargable en la sección de **Artifacts** (`VetApp-Windows-Installer`).
 
-#### 3. Publicación Oficial de Release (Git Tag)
+#### 3. Publicación Oficial de Release (Git Tag o Dispatch con Publish=true)
 Para publicar una versión oficial en GitHub Releases:
 1. Incrementar la versión en `apps/desktop/package.json` (ejemplo: `"version": "0.1.1"`).
-2. Crear y enviar la etiqueta Git correspondiente:
+2. Asegurar que los cambios se encuentren en `main` con el pipeline de CI en verde.
+3. Crear y enviar la etiqueta Git correspondiente:
    ```bash
    git tag v0.1.1
    git push origin v0.1.1
    ```
-3. El workflow validará la coincidencia exacta de la etiqueta con `apps/desktop/package.json`, ejecutará la compilación de la app con `VITE_API_URL`, superará las quality gates y publicará los binarios (`VetApp-Setup-0.1.1.exe`, `latest.yml`, `.blockmap`) en GitHub Releases.
+4. El workflow validará que el commit pertenezca a `main`, que la etiqueta coincida exactamente con la versión de `apps/desktop/package.json`, que el CI principal no tenga fallos, compilará la app con `VITE_API_URL` y publicará los binarios oficiales (`VetApp-Setup-0.1.1.exe`, `latest.yml`, `.blockmap`) en GitHub Releases.
 
-### 9.5 Verificación de Módulos Nativos y Hardware (Lector NFC)
+### 9.9 Verificación de Módulos Nativos y Hardware (Lector NFC)
 
 El módulo de comunicación por puerto serial (`serialport` / `@serialport/bindings-cpp`) está empaquetado fuera del archivo `.asar` mediante la directiva `asarUnpack`, cargando los binarios precompilados de Node-API (`npmRebuild: false`):
 - Al conectar una placa lectora ESP32 por USB, la aplicación autodetecta los chips CP210x o CH340 (`10C4:EA60` o `1A86:7523`) y los lista en la interfaz sin requerir compiladores de C++ ni dependencias externas.

@@ -67,17 +67,41 @@ jobs:
       - name: Build shared types
         run: pnpm --filter @vet-app/shared-types build
 
-      - name: Generate Prisma Client
-        run: pnpm prisma:generate
+      # Nota: Las pruebas, migraciones y validaciones del backend API (Prisma, tests unitarios,
+      # E2E en memoria y E2E contra base real) se ejecutan en el workflow de CI principal (.github/workflows/ci.yml).
+      # Este workflow de Desktop Release se circunscribe estrictamente a las quality gates del cliente de escritorio
+      # (typecheck de shared-types y desktop, tests unitarios del desktop y pruebas de interfaz UI).
+      - name: Quality Gate - Typecheck (Shared Types & Desktop)
+        run: |
+          pnpm --filter @vet-app/shared-types build
+          pnpm --filter @vet-app/desktop exec tsc --noEmit
 
-      - name: Quality Gate - Typecheck
-        run: pnpm typecheck
-
-      - name: Quality Gate - Unit Tests
-        run: pnpm test
+      - name: Quality Gate - Desktop Unit Tests
+        run: pnpm --filter @vet-app/desktop test
 
       - name: Quality Gate - Desktop UI Tests
         run: pnpm --filter @vet-app/desktop run test:ui
+
+      - name: Verify commit is on main branch with green CI (for official releases)
+        if: ${{ (github.event_name == 'push') || (github.event_name == 'workflow_dispatch' && inputs.publish == true) }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Verificando que la publicación oficial provenga de la rama main..."
+          git fetch origin main --depth=100
+          if ! git merge-base --is-ancestor ${{ github.sha }} origin/main; then
+            echo "::error::El commit ${{ github.sha }} no pertenece a la rama main. Las publicaciones oficiales solo se permiten desde main."
+            exit 1
+          fi
+          echo "Verificando estado del CI en el commit..."
+          CI_CONCLUSION=$(gh run list --commit ${{ github.sha }} --workflow "CI" --json conclusion --jq '.[0].conclusion' 2>/dev/null || echo "unknown")
+          echo "Resultado de CI para este commit: $CI_CONCLUSION"
+          if [ "$CI_CONCLUSION" = "failure" ]; then
+            echo "::error::El flujo de CI principal ha fallado para este commit. No se permite publicar un release con CI en rojo."
+            exit 1
+          fi
+          echo "Validación de rama y CI superada exitosamente."
 
       - name: Build Desktop application
         env:

@@ -1,6 +1,13 @@
+import './test-env';
 import { describe, it } from 'node:test';
 import * as assert from 'node:assert/strict';
 import { createTestApp, request, SEED_PASSWORDS } from './e2e-helper';
+
+// Garantizar variables de entorno de prueba para ejecución hermética aislada
+process.env.DATABASE_URL ??= 'postgresql://test_mock_user:test_mock_password@localhost:5432/test_mock_db?schema=public';
+process.env.DIRECT_URL ??= 'postgresql://test_mock_user:test_mock_password@localhost:5432/test_mock_db?schema=public';
+process.env.JWT_SECRET ??= 'test_mock_jwt_secret_must_be_at_least_32_characters_long_for_validation';
+process.env.JWT_REFRESH_SECRET ??= 'test_mock_jwt_refresh_secret_at_least_32_characters_long_for_validation';
 
 describe('PASO 12: Recorrido Manual Integral de la API (End-to-End Walkthrough)', () => {
   it('debe ejecutar exitosamente el flujo completo: login, crear dueño, crear mascota, asignar tag, resolver tag, abrir /p/:publicCode y colisión 409 de agenda', async () => {
