@@ -2,6 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { execSync } from 'node:child_process';
 
 function findRepoRoot(startDir = process.cwd()): string {
   let cur = path.resolve(startDir);
@@ -138,6 +139,10 @@ describe('Auditoría Estática de Seguridad, Compilación Estricta y Bundle sin 
     it('los directorios de distribución apps/desktop/dist y apps/desktop/dist-electron deben existir y carecer de credenciales', () => {
       const distDir = path.join(REPO_ROOT, 'apps', 'desktop', 'dist');
       const distElectronDir = path.join(REPO_ROOT, 'apps', 'desktop', 'dist-electron');
+
+      if (!fs.existsSync(distDir) || !fs.existsSync(distElectronDir)) {
+        execSync('pnpm --filter @vet-app/desktop build', { cwd: REPO_ROOT, stdio: 'pipe' });
+      }
 
       assert.ok(
         fs.existsSync(distDir),

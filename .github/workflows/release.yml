@@ -76,6 +76,13 @@ jobs:
           pnpm --filter @vet-app/shared-types build
           pnpm --filter @vet-app/desktop exec tsc --noEmit
 
+      - name: Build Desktop application
+        env:
+          VITE_API_URL: ${{ vars.VITE_API_URL }}
+          VITE_PUBLIC_URL: ${{ vars.VITE_PUBLIC_URL }}
+        run: |
+          pnpm --filter @vet-app/desktop run build
+
       - name: Quality Gate - Desktop Unit Tests
         run: pnpm --filter @vet-app/desktop test
 
@@ -102,13 +109,6 @@ jobs:
             exit 1
           fi
           echo "Validación de rama y CI superada exitosamente."
-
-      - name: Build Desktop application
-        env:
-          VITE_API_URL: ${{ vars.VITE_API_URL }}
-          VITE_PUBLIC_URL: ${{ vars.VITE_PUBLIC_URL }}
-        run: |
-          pnpm --filter @vet-app/desktop run build
 
       - name: Package Desktop Installer
         shell: bash
