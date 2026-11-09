@@ -169,6 +169,7 @@ jobs:
       - name: Package Desktop Installer
         shell: bash
         env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VITE_API_URL: ${{ vars.VITE_API_URL }}
           VITE_PUBLIC_URL: ${{ vars.VITE_PUBLIC_URL }}
         run: |
