@@ -19,6 +19,9 @@ jobs:
   release-desktop:
     name: Build & Package Windows Desktop Installer
     runs-on: windows-latest
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     steps:
       - name: Checkout repository
