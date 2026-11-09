@@ -490,16 +490,57 @@ Para verificar el empaquetado y descargar el instalador `.exe` desde cualquier r
 4. En la opción **publish**, mantenga el valor por defecto en `false` y haga clic en el botón verde **Run workflow**.
 5. El flujo ejecutará las quality gates específicas del instalador de escritorio (typecheck de shared-types y desktop, tests unitarios del desktop y pruebas UI), compilará la aplicación inyectando `VITE_API_URL`, generará el instalador NSIS en modo local (`publish never`) y lo publicará como artefacto descargable en la sección de **Artifacts** (`VetApp-Windows-Installer`).
 
-#### 3. Publicación Oficial de Release (Git Tag o Dispatch con Publish=true)
-Para publicar una versión oficial en GitHub Releases:
-1. Incrementar la versión en `apps/desktop/package.json` (ejemplo: `"version": "0.1.1"`).
-2. Asegurar que los cambios se encuentren en `main` con el pipeline de CI en verde.
-3. Crear y enviar la etiqueta Git correspondiente:
+#### 3. Publicación Oficial de Release (Flujo Paso a Paso)
+Para publicar una versión oficial en GitHub Releases accesible por el actualizador automático (`electron-updater`):
+1. **Incrementar versión**: Suba la versión en `apps/desktop/package.json` (ejemplo: cambiar `"version": "0.1.0"` a `"version": "0.1.1"`).
+2. **Merge a main con CI en verde**: Envíe el cambio a `main` mediante Pull Request y verifique que el workflow principal de CI (`.github/workflows/ci.yml`) finalice con estado exitoso (**`success`**).
+3. **Crear y enviar la etiqueta Git**: Con la rama local `main` sincronizada (`git checkout main && git pull origin main`), cree la etiqueta correspondiente y envíela al repositorio remoto:
    ```bash
    git tag v0.1.1
    git push origin v0.1.1
    ```
-4. El workflow validará que el commit pertenezca a `main`, que la etiqueta coincida exactamente con la versión de `apps/desktop/package.json`, que el CI principal no tenga fallos, compilará la app con `VITE_API_URL` y publicará los binarios oficiales (`VetApp-Setup-0.1.1.exe`, `latest.yml`, `.blockmap`) en GitHub Releases.
+4. **Flujo de publicación determinista**: El pipeline `.github/workflows/release.yml` se disparará automáticamente y ejecutará las siguientes fases:
+   - Validará que el commit de la etiqueta pertenezca a la rama `main`.
+   - Esperará activamente (hasta 15 minutos) a que el flujo de CI principal para ese commit alcance conclusión **`success`** (bloqueando de forma estricta ante fallos o estados pendientes).
+   - Inyectará `VITE_API_URL` y ejecutará las quality gates de escritorio (typecheck, tests unitarios con auditoría de bundle y pruebas de UI).
+   - Compilará el instalador en modo local estricto (`electron-builder --win --publish never`).
+   - Publicará mediante la CLI de GitHub (`gh release create`) un **único release oficial publicado (no borrador)**, marcado como **Latest**, con notas de cambios generadas automáticamente y los tres archivos esenciales para `electron-updater`:
+     - `VetApp-Setup-0.1.1.exe` (Instalador NSIS por pasos)
+     - `latest.yml` (Manifiesto de versión y firmas sha512)
+     - `VetApp-Setup-0.1.1.exe.blockmap` (Mapa de bloques para descargas diferenciales rápidas)
+
+#### 4. Procedimiento para Eliminar un Release o Etiqueta Mal Publicados
+Si una versión fue etiquetada o publicada por error (por ejemplo, con versión equivocada o binarios incorrectos), siga este procedimiento para sanear el repositorio:
+
+##### Opción A: Mediante GitHub CLI (`gh`) (Recomendado)
+```bash
+# 1. Eliminar el release en GitHub y limpiar su etiqueta remota en un solo comando:
+gh release delete v0.1.1 --yes --cleanup-tag
+
+# 2. Eliminar la etiqueta local en su entorno:
+git tag -d v0.1.1
+```
+
+##### Opción B: Mediante Git estándar y Navegador Web
+```bash
+# 1. Eliminar la etiqueta en el repositorio remoto:
+git push origin --delete v0.1.1
+
+# 2. Eliminar la etiqueta en su repositorio local:
+git tag -d v0.1.1
+
+# 3. En el navegador web: ingrese a GitHub > Releases, seleccione el release v0.1.1 y haga clic en "Delete release".
+```
+
+##### Opción C: Limpieza de Borradores Huérfanos o Duplicados
+Si existiesen versiones en borrador generadas por ejecuciones incompletas:
+```bash
+# Listar todos los releases y borradores existentes:
+gh release list
+
+# Eliminar un release borrador directamente por su ID de API:
+gh api -X DELETE repos/RainbowDash23/vet-app/releases/<RELEASE_ID>
+```
 
 ### 9.9 Verificación de Módulos Nativos y Hardware (Lector NFC)
 

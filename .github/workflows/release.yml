@@ -101,29 +101,79 @@ jobs:
             echo "::error::El commit ${{ github.sha }} no pertenece a la rama main. Las publicaciones oficiales solo se permiten desde main."
             exit 1
           fi
-          echo "Verificando estado del CI en el commit..."
-          CI_CONCLUSION=$(gh run list --commit ${{ github.sha }} --workflow "CI" --json conclusion --jq '.[0].conclusion' 2>/dev/null || echo "unknown")
-          echo "Resultado de CI para este commit: $CI_CONCLUSION"
-          if [ "$CI_CONCLUSION" = "failure" ]; then
-            echo "::error::El flujo de CI principal ha fallado para este commit. No se permite publicar un release con CI en rojo."
+
+          echo "Verificando que el flujo de CI principal esté en 'success' para el commit ${{ github.sha }}..."
+          COMMIT_SHA="${{ github.sha }}"
+          MAX_ATTEMPTS=45
+          INTERVAL_SEC=20
+          CI_OK=false
+
+          for (( i=1; i<=MAX_ATTEMPTS; i++ )); do
+            RUNS_JSON=$(gh run list --commit "$COMMIT_SHA" --workflow "CI" --json databaseId,status,conclusion 2>/dev/null || echo "[]")
+            
+            EVAL_RESULT=$(node -e '
+              let data = [];
+              try { data = JSON.parse(process.argv[1] || "[]"); } catch (e) { data = []; }
+              if (!Array.isArray(data) || data.length === 0) {
+                console.log("WAIT_EMPTY");
+                process.exit(0);
+              }
+              const successRun = data.find(r => r.conclusion === "success");
+              if (successRun) {
+                console.log("SUCCESS:" + successRun.databaseId);
+                process.exit(0);
+              }
+              const activeRun = data.find(r => ["in_progress", "queued", "waiting", "requested", "pending"].includes(r.status));
+              if (activeRun) {
+                console.log("WAIT_ACTIVE:" + activeRun.databaseId + ":" + activeRun.status);
+                process.exit(0);
+              }
+              const latest = data[0];
+              console.log("FAILED:" + (latest.databaseId || "none") + ":" + (latest.conclusion || latest.status || "unknown"));
+            ' "$RUNS_JSON")
+
+            case "$EVAL_RESULT" in
+              SUCCESS:*)
+                RUN_ID="${EVAL_RESULT#SUCCESS:}"
+                echo "Flujo de CI principal verificado exitosamente (Run #$RUN_ID con conclusión 'success')."
+                CI_OK=true
+                break
+                ;;
+              WAIT_ACTIVE:*)
+                INFO="${EVAL_RESULT#WAIT_ACTIVE:}"
+                echo "Intento $i/$MAX_ATTEMPTS: Flujo de CI ($INFO) en curso. Esperando $INTERVAL_SEC segundos..."
+                sleep $INTERVAL_SEC
+                ;;
+              WAIT_EMPTY)
+                echo "Intento $i/$MAX_ATTEMPTS: Aún no se ha detectado una ejecución de CI para el commit $COMMIT_SHA. Esperando $INTERVAL_SEC segundos..."
+                sleep $INTERVAL_SEC
+                ;;
+              FAILED:*)
+                INFO="${EVAL_RESULT#FAILED:}"
+                echo "::error::El flujo de CI principal ($INFO) para el commit $COMMIT_SHA no alcanzó el estado requerido 'success'. No se permite publicar el release."
+                exit 1
+                ;;
+              *)
+                echo "Intento $i/$MAX_ATTEMPTS: Respuesta de evaluación no esperada ($EVAL_RESULT). Esperando $INTERVAL_SEC segundos..."
+                sleep $INTERVAL_SEC
+                ;;
+            esac
+          done
+
+          if [ "$CI_OK" != "true" ]; then
+            echo "::error::Tiempo de espera agotado (15 minutos). El flujo de CI principal no alcanzó el estado 'success' para el commit $COMMIT_SHA."
             exit 1
           fi
-          echo "Validación de rama y CI superada exitosamente."
+          echo "Validación de rama main y CI superada exitosamente."
 
       - name: Package Desktop Installer
         shell: bash
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VITE_API_URL: ${{ vars.VITE_API_URL }}
           VITE_PUBLIC_URL: ${{ vars.VITE_PUBLIC_URL }}
         run: |
-          if [ "${{ github.event_name == 'push' || inputs.publish == true }}" = "true" ]; then
-            echo "Publicando instalador en GitHub Releases..."
-            pnpm --filter @vet-app/desktop exec electron-builder --win --publish always
-          else
-            echo "Compilando instalador sin publicar (modo de prueba / artefacto)..."
-            pnpm --filter @vet-app/desktop exec electron-builder --win --publish never
-          fi
+          echo "Compilando instalador de escritorio localmente con electron-builder (publish: never)..."
+          pnpm --filter @vet-app/desktop exec electron-builder --win --publish never
 
       - name: Upload Installer Artifact
         if: ${{ github.event_name == 'workflow_dispatch' && !inputs.publish }}
@@ -135,3 +185,59 @@ jobs:
             apps/desktop/release/latest.yml
             apps/desktop/release/*.blockmap
           if-no-files-found: error
+
+      - name: Publish Official GitHub Release
+        if: ${{ (github.event_name == 'push') || (github.event_name == 'workflow_dispatch' && inputs.publish == true) }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PACKAGE_VERSION=$(node -p "require('./apps/desktop/package.json').version")
+          if [ "${{ github.event_name }}" = "push" ]; then
+            TAG_NAME="${GITHUB_REF#refs/tags/}"
+          else
+            TAG_NAME="v${PACKAGE_VERSION}"
+          fi
+          RELEASE_TITLE="v${PACKAGE_VERSION}"
+          RELEASE_DIR="apps/desktop/release"
+
+          EXE_FILE="$RELEASE_DIR/VetApp-Setup-${PACKAGE_VERSION}.exe"
+          YML_FILE="$RELEASE_DIR/latest.yml"
+          BLOCKMAP_FILE="$RELEASE_DIR/VetApp-Setup-${PACKAGE_VERSION}.exe.blockmap"
+
+          echo "Verificando existencia de artefactos compilados..."
+          if [ ! -f "$EXE_FILE" ]; then
+            echo "::error::Archivo del instalador no encontrado: $EXE_FILE"
+            exit 1
+          fi
+          if [ ! -f "$YML_FILE" ]; then
+            echo "::error::Archivo de manifiesto latest.yml no encontrado: $YML_FILE"
+            exit 1
+          fi
+          if [ ! -f "$BLOCKMAP_FILE" ]; then
+            echo "::error::Archivo blockmap no encontrado: $BLOCKMAP_FILE"
+            exit 1
+          fi
+
+          echo "Artefactos a publicar:"
+          echo " - $EXE_FILE"
+          echo " - $YML_FILE"
+          echo " - $BLOCKMAP_FILE"
+
+          echo "Verificando si ya existe un release para la etiqueta $TAG_NAME..."
+          if gh release view "$TAG_NAME" >/dev/null 2>&1; then
+            echo "El release para la etiqueta $TAG_NAME ya existe. Actualizando artefactos (clobber) y asegurando publicación oficial..."
+            gh release upload "$TAG_NAME" "$EXE_FILE" "$YML_FILE" "$BLOCKMAP_FILE" --clobber
+            gh release edit "$TAG_NAME" --draft=false --latest --title "$RELEASE_TITLE"
+          else
+            echo "Creando nuevo release publicado para $TAG_NAME..."
+            gh release create "$TAG_NAME" \
+              "$EXE_FILE" \
+              "$YML_FILE" \
+              "$BLOCKMAP_FILE" \
+              --target "${{ github.sha }}" \
+              --title "$RELEASE_TITLE" \
+              --generate-notes \
+              --latest
+          fi
+          echo "Release $TAG_NAME publicado exitosamente como Latest (no borrador)."
