@@ -13,6 +13,8 @@ export interface MainLayoutProps {
   hardwareStatus?: HardwareStatus;
   onLogout?: () => void;
   className?: string;
+  onOpenWhatsNew?: () => void;
+  onOpenQuickSearch?: () => void;
   children: ReactNode;
 }
 
@@ -25,6 +27,8 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
   hardwareStatus,
   onLogout,
   className,
+  onOpenWhatsNew,
+  onOpenQuickSearch,
   children,
 }) => {
   const rootClass = [styles.layout, className].filter(Boolean).join(' ');
@@ -36,6 +40,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
         activeScreen={activeScreen}
         onSelectScreen={onSelectScreen}
         role={role}
+        onOpenWhatsNew={onOpenWhatsNew}
       />
 
       {/* Contenedor vertical: Header superior + Área de contenido principal */}
@@ -46,6 +51,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({
           userName={userName}
           hardwareStatus={hardwareStatus}
           onLogout={onLogout}
+          onOpenQuickSearch={onOpenQuickSearch}
         />
 
         <main className={styles.mainContent} role="main">

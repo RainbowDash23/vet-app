@@ -84,6 +84,14 @@ export function createElectronApi(ipc: IpcRenderer): ElectronAPI & {
     skipUpdate: (): Promise<void> => {
       return ipc.invoke('updater:skip');
     },
+
+    getWhatsNewStatus: (): Promise<import('@vet-app/shared-types').WhatsNewStatus> => {
+      return ipc.invoke('system:get-whats-new-status');
+    },
+
+    markWhatsNewSeen: (version?: string): Promise<void> => {
+      return ipc.invoke('system:mark-whats-new-seen', version);
+    },
   };
 }
 

@@ -39,6 +39,12 @@ export interface UpdateStatusPayload {
   error?: string;
 }
 
+export interface WhatsNewStatus {
+  showWhatsNew: boolean;
+  currentVersion: string;
+  lastSeenVersion: string | null;
+}
+
 export interface ElectronAPI {
   onTagDetected: (callback: (uid: string) => void) => () => void;
   onHardwareStatusChange?: (callback: (status: HardwareStatus) => void) => () => void;
@@ -51,6 +57,8 @@ export interface ElectronAPI {
   onUpdaterStatus?: (callback: (status: UpdateStatusPayload) => void) => () => void;
   restartAndInstallUpdate?: () => Promise<void>;
   skipUpdate?: () => Promise<void>;
+  getWhatsNewStatus?: () => Promise<WhatsNewStatus>;
+  markWhatsNewSeen?: (version?: string) => Promise<void>;
 }
 
 declare global {

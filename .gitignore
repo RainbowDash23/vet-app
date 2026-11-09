@@ -34,6 +34,8 @@ firmware/config.py
 *.db
 *.sqlite
 *.sqlite3
+release-state.json
+**/release-state.json
 
 # Logs
 *.log

@@ -4,6 +4,7 @@ import type { BrowserWindow as BrowserWindowInstance, BrowserWindowConstructorOp
 import { SerialManager } from './serial.manager.ts';
 import { APP_SCHEME_PRIVILEGES, registerAppProtocol } from './custom-protocol.ts';
 import { UpdaterManager } from './updater.manager.ts';
+import { WhatsNewManager } from './whats-new.manager.ts';
 import type { IAutoUpdater } from './updater.manager.ts';
 import type { HardwareStatus } from '@vet-app/shared-types';
 
@@ -79,7 +80,11 @@ export const serialManager = new SerialManager();
 export const updaterManager = new UpdaterManager({
   updater: resolveAutoUpdater() ?? undefined,
   isPackaged: Boolean(app?.isPackaged),
-  currentVersion: app?.getVersion ? app.getVersion() : '0.1.0',
+  currentVersion: app?.getVersion ? app.getVersion() : '0.1.1',
+});
+export const whatsNewManager = new WhatsNewManager({
+  appInstance: app,
+  currentVersion: app?.getVersion ? app.getVersion() : '0.1.1',
 });
 
 export function getMainWindow(): BrowserWindowInstance | null {
@@ -184,6 +189,7 @@ export function registerIpcHandlers(
   ipc: IpcMain = ipcMain,
   appInstance: App = app,
   updater: UpdaterManager = updaterManager,
+  whatsNew: WhatsNewManager = whatsNewManager,
 ): void {
   if (!ipc) {
     return;
@@ -250,10 +256,20 @@ export function registerIpcHandlers(
   // Información del sistema sin datos sensibles ni secretos de infraestructura (RNF-2)
   ipc.handle('system:get-app-info', () => {
     return {
-      version: appInstance?.getVersion ? appInstance.getVersion() : '0.1.0',
+      version: appInstance?.getVersion ? appInstance.getVersion() : '0.1.1',
       platform: process.platform,
       arch: process.arch,
     };
+  });
+
+  // Manejadores IPC para el estado y confirmación de novedades (What's New)
+  ipc.handle('system:get-whats-new-status', () => {
+    return whatsNew.getStatus();
+  });
+
+  ipc.handle('system:mark-whats-new-seen', (_event: unknown, version?: string) => {
+    whatsNew.markSeen(version);
+    return { success: true };
   });
 
   // Manejadores IPC para el gestor de auto-actualizaciones
@@ -276,7 +292,7 @@ export function registerIpcHandlers(
 if (app && typeof app.whenReady === 'function') {
   app.whenReady().then(() => {
     registerAppProtocol(protocol, path.join(currentDir, '../dist'));
-    registerIpcHandlers(serialManager, ipcMain, app, updaterManager);
+    registerIpcHandlers(serialManager, ipcMain, app, updaterManager, whatsNewManager);
 
     const isPackaged = Boolean(app.isPackaged);
 

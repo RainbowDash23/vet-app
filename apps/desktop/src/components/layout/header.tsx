@@ -1,7 +1,7 @@
 import React from 'react';
 import type { Role, HardwareStatus } from '@vet-app/shared-types';
 import { HardwareStatusIndicator } from './hardware-status-indicator';
-import { ClinicIcon, LogoutIcon } from '../ui/icons';
+import { ClinicIcon, LogoutIcon, SearchIcon } from '../ui/icons';
 import styles from './header.module.css';
 
 export interface HeaderProps {
@@ -11,6 +11,7 @@ export interface HeaderProps {
   hardwareStatus?: HardwareStatus;
   onLogout?: () => void;
   className?: string;
+  onOpenQuickSearch?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -20,6 +21,7 @@ export const Header: React.FC<HeaderProps> = ({
   hardwareStatus,
   onLogout,
   className,
+  onOpenQuickSearch,
 }) => {
   const getRoleBadgeClass = (r?: Role | 'ADMIN' | 'VET' | 'RECEPTION') => {
     switch (r) {
@@ -43,6 +45,20 @@ export const Header: React.FC<HeaderProps> = ({
           <ClinicIcon className={styles.clinicIcon} aria-hidden="true" size={16} />
           <span className={styles.clinicName}>{clinicName}</span>
         </div>
+
+        {onOpenQuickSearch && (
+          <button
+            type="button"
+            className={styles.quickSearchBtn}
+            onClick={onOpenQuickSearch}
+            data-testid="header-quick-search-btn"
+            aria-label="Abrir búsqueda rápida (Ctrl+K)"
+          >
+            <SearchIcon size={14} aria-hidden="true" />
+            <span className={styles.quickSearchText}>Buscar...</span>
+            <kbd className={styles.quickSearchKbd}>Ctrl+K</kbd>
+          </button>
+        )}
       </div>
 
       <div className={styles.rightSection}>

@@ -11,6 +11,8 @@ import { PatientFileScreen } from './screens/patient-file-screen';
 import { VisitConsultationScreen } from './screens/visit-consultation-screen';
 import { ScheduleScreen } from './screens/schedule-screen';
 import { UsersScreen } from './screens/users-screen';
+import { QuickSearchModal } from './components/quick-search/quick-search-modal';
+import { WhatsNewModal } from './components/whats-new/whats-new-modal';
 import { UnsavedChangesDialog } from './components/screens/unsaved-changes-dialog';
 import {
   AlertDialog,
@@ -67,6 +69,11 @@ export const AppContent: React.FC<AppContentProps> = ({
     message: '',
   });
 
+  // Estados para paleta de búsqueda rápida (Ctrl+K) y modal de novedades v0.1.1
+  const [isQuickSearchOpen, setIsQuickSearchOpen] = useState<boolean>(false);
+  const [isWhatsNewOpen, setIsWhatsNewOpen] = useState<boolean>(false);
+  const [whatsNewVersion, setWhatsNewVersion] = useState<string>('0.1.1');
+
   const isMountedRef = useRef(true);
   useEffect(() => {
     isMountedRef.current = true;
@@ -111,6 +118,56 @@ export const AppContent: React.FC<AppContentProps> = ({
       mounted = false;
     };
   }, [isAuthenticated, user?.clinicId, apiClientInstance]);
+
+  // Atajo global Ctrl+K / Cmd+K para abrir/cerrar la paleta de búsqueda rápida
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
+        e.preventDefault();
+        setIsQuickSearchOpen((prev) => !prev);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isAuthenticated]);
+
+  // Comprobación de novedades de versión (solo primera ejecución tras actualizar)
+  useEffect(() => {
+    let mounted = true;
+    if (isAuthenticated && window.electronAPI?.getWhatsNewStatus) {
+      window.electronAPI
+        .getWhatsNewStatus()
+        .then((status) => {
+          if (mounted && status?.showWhatsNew) {
+            setWhatsNewVersion(status.currentVersion || '0.1.1');
+            setIsWhatsNewOpen(true);
+          }
+        })
+        .catch((err) => {
+          console.error('Error al consultar estado de novedades:', err);
+        });
+    }
+
+    return () => {
+      mounted = false;
+    };
+  }, [isAuthenticated]);
+
+  const handleCloseWhatsNew = useCallback(async () => {
+    setIsWhatsNewOpen(false);
+    if (window.electronAPI?.markWhatsNewSeen) {
+      try {
+        await window.electronAPI.markWhatsNewSeen(whatsNewVersion);
+      } catch (err) {
+        console.error('Error al marcar novedades como vistas:', err);
+      }
+    }
+  }, [whatsNewVersion]);
 
   /**
    * Resuelve el UID escaneado y enruta a la pantalla correspondiente (RF-70, RT-2).
@@ -289,9 +346,37 @@ export const AppContent: React.FC<AppContentProps> = ({
         userName={user?.name}
         clinicName={clinicCommercialName}
         onLogout={handleLogout}
+        onOpenWhatsNew={() => setIsWhatsNewOpen(true)}
+        onOpenQuickSearch={() => setIsQuickSearchOpen(true)}
       >
         {renderActiveScreen()}
       </MainLayout>
+
+      {/* Paleta accesible de búsqueda rápida (Ctrl+K) */}
+      <QuickSearchModal
+        isOpen={isQuickSearchOpen}
+        onClose={() => setIsQuickSearchOpen(false)}
+        currentUserRole={role ?? undefined}
+        petsServiceInstance={petsServiceInstance}
+        onSelectPet={(petId) => {
+          setActivePetId(petId);
+          setActivePetUid(undefined);
+          setActiveTagData(undefined);
+          setActiveScreen('clinical-record');
+          setIsQuickSearchOpen(false);
+        }}
+        onSelectScreen={(screenId) => {
+          setActiveScreen(screenId);
+          setIsQuickSearchOpen(false);
+        }}
+      />
+
+      {/* Modal de novedades de la versión (What's New) */}
+      <WhatsNewModal
+        isOpen={isWhatsNewOpen}
+        onClose={handleCloseWhatsNew}
+        version={whatsNewVersion}
+      />
 
       {/* Diálogo accesible ante cambios no guardados en formularios activos (RF-33) */}
       <UnsavedChangesDialog

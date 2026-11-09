@@ -40,6 +40,7 @@ export interface SidebarProps {
   onSelectScreen?: (screen: ScreenId) => void;
   role?: Role | 'ADMIN' | 'VET' | 'RECEPTION';
   className?: string;
+  onOpenWhatsNew?: () => void;
 }
 
 const RECEPTION_NAV_ITEMS: NavItemConfig[] = [
@@ -74,7 +75,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onSelectScreen,
   role,
   className,
+  onOpenWhatsNew,
 }) => {
+  const [appVersion, setAppVersion] = useState<string>('0.1.1');
   const [recentScan, setRecentScan] = useState<{ uid: string; time: string } | null>(null);
   const scanTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMountedRef = useRef(true);
@@ -82,6 +85,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
     isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    if (window.electronAPI?.getAppInfo) {
+      window.electronAPI
+        .getAppInfo()
+        .then((info) => {
+          if (mounted && info?.version) {
+            setAppVersion(info.version);
+          }
+        })
+        .catch(() => {
+          // Mantener versión por defecto
+        });
+    }
+    return () => {
+      mounted = false;
     };
   }, []);
 
@@ -373,6 +395,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </button>
           )}
         </div>
+      </div>
+
+      <div className={styles.sidebarFooter} data-testid="sidebar-footer">
+        {onOpenWhatsNew ? (
+          <button
+            type="button"
+            className={styles.whatsNewLink}
+            onClick={onOpenWhatsNew}
+            data-testid="sidebar-whats-new-btn"
+            aria-label="Ver novedades de la versión"
+          >
+            Novedades
+          </button>
+        ) : (
+          <span />
+        )}
+        <span className={styles.appVersion} data-testid="sidebar-app-version">
+          v{appVersion}
+        </span>
       </div>
     </aside>
   );

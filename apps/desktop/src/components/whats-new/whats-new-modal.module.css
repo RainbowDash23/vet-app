@@ -1,0 +1,103 @@
+.content {
+  max-width: 520px;
+  width: 90vw;
+  background-color: var(--color-bg-card, #13171f);
+  border: 1px solid var(--color-border, #262c36);
+  border-radius: var(--radius-lg, 8px);
+  padding: var(--space-6, 24px);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
+  color: var(--color-text-primary, #f1f5f9);
+}
+
+.header {
+  margin-bottom: var(--space-4, 16px);
+}
+
+.versionBadge {
+  display: inline-flex;
+  align-items: center;
+  font-size: var(--font-size-xs, 12px);
+  font-weight: var(--font-weight-semibold, 600);
+  color: var(--color-primary, #14b8a6);
+  background-color: var(--color-primary-light, rgba(20, 184, 166, 0.15));
+  padding: 2px 8px;
+  border-radius: var(--radius-sm, 4px);
+  margin-bottom: var(--space-2, 8px);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.title {
+  font-size: var(--font-size-xl, 20px);
+  font-weight: var(--font-weight-bold, 700);
+  color: var(--color-text-primary, #f1f5f9);
+  margin: 0 0 var(--space-2, 8px) 0;
+  letter-spacing: -0.01em;
+}
+
+.description {
+  font-size: var(--font-size-sm, 14px);
+  color: var(--color-text-secondary, #94a3b8);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.highlightsList {
+  list-style: none;
+  padding: 0;
+  margin: var(--space-4, 16px) 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3, 12px);
+}
+
+.highlightItem {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3, 12px);
+  font-size: var(--font-size-sm, 14px);
+  color: var(--color-text-primary, #f1f5f9);
+  line-height: 1.5;
+  background-color: var(--color-bg-app, #0c0e12);
+  padding: var(--space-3, 12px) var(--space-4, 16px);
+  border-radius: var(--radius-md, 6px);
+  border: 1px solid var(--color-border-subtle, #1e2430);
+}
+
+.highlightBullet {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--color-primary, #14b8a6);
+  margin-top: 6px;
+}
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--space-5, 20px);
+  padding-top: var(--space-4, 16px);
+  border-top: 1px solid var(--color-border-subtle, #1e2430);
+}
+
+.closeButton {
+  padding: var(--space-2, 8px) var(--space-5, 20px);
+  background-color: var(--color-primary, #14b8a6);
+  color: var(--color-primary-foreground, #042f2e);
+  font-size: var(--font-size-sm, 14px);
+  font-weight: var(--font-weight-semibold, 600);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md, 6px);
+  cursor: pointer;
+  transition: background-color var(--transition-fast, 150ms);
+}
+
+.closeButton:hover {
+  background-color: var(--color-primary-hover, #0d9488);
+}
+
+.closeButton:focus-visible {
+  outline: 2px solid var(--color-border-focus, #38bdf8);
+  outline-offset: 2px;
+}

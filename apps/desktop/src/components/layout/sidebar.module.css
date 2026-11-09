@@ -272,3 +272,41 @@
   color: var(--color-text-muted);
   text-align: center;
 }
+
+.sidebarFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-2) 0 var(--space-2);
+  margin-top: var(--space-3);
+  border-top: 1px solid var(--color-border-subtle);
+  font-size: 11px;
+}
+
+.whatsNewLink {
+  background: transparent;
+  border: none;
+  padding: 0;
+  font-size: 11px;
+  font-weight: var(--font-weight-medium);
+  color: var(--color-primary);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: color var(--transition-fast);
+}
+
+.whatsNewLink:hover {
+  color: var(--color-primary-hover, #0d9488);
+}
+
+.whatsNewLink:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 2px;
+}
+
+.appVersion {
+  font-size: 11px;
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-muted);
+}
