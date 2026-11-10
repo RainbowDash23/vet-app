@@ -13,7 +13,7 @@ import { QueryAccessLogDto } from '../../src/modules/audit/dto/query-access-log.
 
 interface MockAccessLog {
   id: string;
-  petId: string;
+  petId: string | null;
   clinicId: string | null;
   userId: string | null;
   action: AccessAction;

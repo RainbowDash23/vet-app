@@ -57,6 +57,8 @@ enum AccessAction {
   EMERGENCY_SCAN
   NFC_SCAN_DENIED
   ROSTER_ADD
+  NFC_RATE_LIMIT_EXCEEDED
+  NFC_SCAN_ANOMALY
 }
 
 enum ClinicPatientSource {
@@ -79,6 +81,7 @@ enum GrantScope {
 enum NotificationType {
   VISIT_REMINDER
   VACCINE_ALERT
+  NFC_SCAN_ALERT
 }
 
 enum NotificationStatus {
@@ -293,7 +296,7 @@ model AccessGrant {
 
 model AccessLog {
   id        String       @id @default(uuid())
-  petId     String
+  petId     String?
   clinicId  String?
   userId    String?
   action    AccessAction @default(NFC_SCAN)
@@ -301,7 +304,7 @@ model AccessLog {
   userAgent String?
   timestamp DateTime     @default(now())
 
-  pet    Pet     @relation(fields: [petId], references: [id], onDelete: Cascade)
+  pet    Pet?    @relation(fields: [petId], references: [id], onDelete: Cascade)
   clinic Clinic? @relation(fields: [clinicId], references: [id], onDelete: SetNull)
   user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
 

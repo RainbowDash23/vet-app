@@ -5,9 +5,9 @@ import { AccessAction } from '@prisma/client';
  * DTO para la creación de un registro en la bitácora de auditoría inmutable (RF-25, RF-37).
  */
 export class CreateAccessLogDto {
-  @IsNotEmpty({ message: 'El identificador de la mascota es obligatorio' })
+  @IsOptional()
   @IsUUID('all', { message: 'El identificador de la mascota debe ser un UUID válido' })
-  petId!: string;
+  petId?: string | null;
 
   @IsOptional()
   @IsUUID('all', { message: 'El identificador de la clínica debe ser un UUID válido' })

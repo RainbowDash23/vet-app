@@ -5,10 +5,12 @@ import * as path from 'node:path';
 import * as fs from 'node:fs';
 import * as bcrypt from 'bcryptjs';
 import { INestApplication } from '@nestjs/common';
-import { AccessAction, GrantScope, GrantSource, Role, TagStatus } from '@prisma/client';
+import { AccessAction, GrantScope, GrantSource, PetSpecies, Role, TagStatus } from '@prisma/client';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { TagsService } from '../src/modules/tags/tags.service';
 import { AccessGrantsService } from '../src/modules/pets/access-grants.service';
+import { TagAbuseProtectionService } from '../src/modules/tags/tag-abuse-protection.service';
+import { MailTransportService } from '../src/modules/notifications/mail-transport.service';
 import {
   createTestApp,
   CLINIC_A_ID,
@@ -26,6 +28,8 @@ describe('E2E: Transaccionalidad Atómica y Reversión Total (Rollback) contra P
   let prisma: PrismaService;
   let tagsService: TagsService;
   let accessGrantsService: AccessGrantsService;
+  let abuseService: TagAbuseProtectionService;
+  let mailTransportService: MailTransportService;
 
   before(async () => {
     process.env.USE_REAL_DB = 'true';
@@ -60,6 +64,8 @@ describe('E2E: Transaccionalidad Atómica y Reversión Total (Rollback) contra P
     prisma = app.get(PrismaService);
     tagsService = app.get(TagsService);
     accessGrantsService = app.get(AccessGrantsService);
+    abuseService = app.get(TagAbuseProtectionService);
+    mailTransportService = app.get(MailTransportService);
 
     if (testContext.syncToPostgres) {
       await testContext.syncToPostgres();
@@ -650,6 +656,338 @@ describe('E2E: Transaccionalidad Atómica y Reversión Total (Rollback) contra P
       await prisma.owner.delete({ where: { id: ownerAId } });
       await prisma.user.delete({ where: { id: userC.id } });
       await prisma.clinic.delete({ where: { id: clinicC.id } });
+    });
+  });
+
+  describe('6. Controles de abuso NFC contra PostgreSQL real (Rate limit, anomalías, aviso al dueño)', () => {
+    it('debe responder 429 en español, registrar NFC_RATE_LIMIT_EXCEEDED en PostgreSQL y permitir a otros usuarios/clínicas operar', async () => {
+      // 1. Obtener tokens
+      const loginBRes = await request(app.getHttpServer()).post('/auth/login').send({
+        email: 'vet2@vetapp.com',
+        password: SEED_PASSWORDS.vetB,
+      });
+      assert.strictEqual(loginBRes.status, 200);
+      const tokenB = loginBRes.body.accessToken;
+
+      const loginARes = await request(app.getHttpServer()).post('/auth/login').send({
+        email: 'reception@vetapp.com',
+        password: SEED_PASSWORDS.reception,
+      });
+      assert.strictEqual(loginARes.status, 200);
+      const tokenA = loginARes.body.accessToken;
+
+      // 2. Configurar rate limit bajo para probar el bloqueo
+      abuseService.setConfig({
+        userLimit: 3,
+        userTtlMs: 60000,
+        clinicLimit: 10,
+        clinicTtlMs: 60000,
+      });
+      abuseService.reset();
+
+      // 3. Crear un tag activo de prueba en PostgreSQL real
+      const testUid = '04TEST' + Date.now().toString().slice(-6);
+      const pet = await prisma.pet.create({
+        data: {
+          name: 'Perro RateLimit',
+          species: PetSpecies.CANINE,
+          ownerId: OWNER_1_ID,
+          createdByClinicId: CLINIC_A_ID,
+        },
+      });
+      const tag = await prisma.tag.create({
+        data: {
+          uid: testUid,
+          publicCode: crypto.randomUUID(),
+          status: TagStatus.ACTIVE,
+          petId: pet.id,
+        },
+      });
+
+      try {
+        // 4. Tres escaneos exitosos (200 OK)
+        for (let i = 0; i < 3; i++) {
+          const res = await request(app.getHttpServer())
+            .get(`/tags/resolve/${testUid}`)
+            .set('Authorization', `Bearer ${tokenB}`);
+          assert.strictEqual(res.status, 200);
+        }
+
+        // 5. El 4to escaneo debe retornar HTTP 429 con mensaje claro en español
+        const blockedRes = await request(app.getHttpServer())
+          .get(`/tags/resolve/${testUid}`)
+          .set('Authorization', `Bearer ${tokenB}`);
+        assert.strictEqual(blockedRes.status, 429);
+        assert.match(
+          blockedRes.body.message,
+          /Límite de escaneos NFC excedido para este usuario/,
+          'Debe informar con mensaje claro en español',
+        );
+
+        // 6. Verificar en PostgreSQL real que se registró en access_logs con NFC_RATE_LIMIT_EXCEEDED
+        const rateLimitLog = await prisma.accessLog.findFirst({
+          where: {
+            clinicId: CLINIC_B_ID,
+            action: AccessAction.NFC_RATE_LIMIT_EXCEEDED,
+          },
+          orderBy: { timestamp: 'desc' },
+        });
+        assert.ok(rateLimitLog, 'Debe existir registro en access_logs en PostgreSQL');
+        assert.strictEqual(rateLimitLog.clinicId, CLINIC_B_ID);
+
+        // 7. Otro usuario de Clínica A debe poder seguir operando con éxito (200 OK)
+        const userARes = await request(app.getHttpServer())
+          .get(`/tags/resolve/${testUid}`)
+          .set('Authorization', `Bearer ${tokenA}`);
+        assert.strictEqual(userARes.status, 200, 'Otro usuario no debe verse afectado por el rate limit');
+
+      } finally {
+        // Restaurar defaults y limpiar
+        abuseService.reset();
+        abuseService.setConfig({
+          userLimit: 30,
+          userTtlMs: 60000,
+          clinicLimit: 100,
+          clinicTtlMs: 60000,
+        });
+        await prisma.accessLog.deleteMany({ where: { petId: pet.id } });
+        await prisma.accessGrant.deleteMany({ where: { petId: pet.id } });
+        await prisma.tag.deleteMany({ where: { petId: pet.id } });
+        await prisma.pet.delete({ where: { id: pet.id } });
+      }
+    });
+
+    it('debe registrar NFC_SCAN_ANOMALY en PostgreSQL sin bloquear la resolución ante ráfaga de mascotas distintas', async () => {
+      const loginBRes = await request(app.getHttpServer()).post('/auth/login').send({
+        email: 'vet2@vetapp.com',
+        password: SEED_PASSWORDS.vetB,
+      });
+      assert.strictEqual(loginBRes.status, 200);
+      const tokenB = loginBRes.body.accessToken;
+
+      abuseService.setConfig({
+        anomalyThreshold: 2,
+        anomalyWindowMs: 60000,
+        userLimit: 50,
+        clinicLimit: 50,
+      });
+      abuseService.reset();
+
+      // Crear 3 mascotas con tags distintos
+      const pets = await Promise.all([
+        prisma.pet.create({ data: { name: 'Mascota Anom 1', species: PetSpecies.CANINE, ownerId: OWNER_1_ID, createdByClinicId: CLINIC_A_ID } }),
+        prisma.pet.create({ data: { name: 'Mascota Anom 2', species: PetSpecies.FELINE, ownerId: OWNER_1_ID, createdByClinicId: CLINIC_A_ID } }),
+        prisma.pet.create({ data: { name: 'Mascota Anom 3', species: PetSpecies.CANINE, ownerId: OWNER_1_ID, createdByClinicId: CLINIC_A_ID } }),
+      ]);
+
+      const tags = await Promise.all(
+        pets.map((p, idx) =>
+          prisma.tag.create({
+            data: {
+              uid: '04ANOM' + Date.now().toString().slice(-4) + idx,
+              publicCode: crypto.randomUUID(),
+              status: TagStatus.ACTIVE,
+              petId: p.id,
+            },
+          }),
+        ),
+      );
+
+      try {
+        // Resolver mascota 1 y 2
+        const res1 = await request(app.getHttpServer())
+          .get(`/tags/resolve/${tags[0].uid}`)
+          .set('Authorization', `Bearer ${tokenB}`);
+        assert.strictEqual(res1.status, 200);
+
+        const res2 = await request(app.getHttpServer())
+          .get(`/tags/resolve/${tags[1].uid}`)
+          .set('Authorization', `Bearer ${tokenB}`);
+        assert.strictEqual(res2.status, 200);
+
+        // 3ra mascota distinta supera umbral de 2: NO debe bloquearse (200 OK)
+        const res3 = await request(app.getHttpServer())
+          .get(`/tags/resolve/${tags[2].uid}`)
+          .set('Authorization', `Bearer ${tokenB}`);
+        assert.strictEqual(res3.status, 200, 'La detección de anomalía NO debe bloquear la atención médica');
+        assert.strictEqual(res3.body.registered, true);
+
+        // Verificar que en PostgreSQL real se registró la anomalía en access_logs
+        const anomalyLog = await prisma.accessLog.findFirst({
+          where: {
+            clinicId: CLINIC_B_ID,
+            action: AccessAction.NFC_SCAN_ANOMALY,
+          },
+          orderBy: { timestamp: 'desc' },
+        });
+        assert.ok(anomalyLog, 'Debe persistirse el evento de auditoría NFC_SCAN_ANOMALY en PostgreSQL');
+        assert.strictEqual(anomalyLog.petId, pets[2].id);
+
+      } finally {
+        abuseService.reset();
+        for (const p of pets) {
+          await prisma.accessLog.deleteMany({ where: { petId: p.id } });
+          await prisma.accessGrant.deleteMany({ where: { petId: p.id } });
+          await prisma.tag.deleteMany({ where: { petId: p.id } });
+          await prisma.pet.delete({ where: { id: p.id } });
+        }
+      }
+    });
+
+    it('aviso al dueño: escaneo cross-clínica persiste Notification en PostgreSQL, es idempotente por día y tolerante a fallos del mailer', async () => {
+      const loginBRes = await request(app.getHttpServer()).post('/auth/login').send({
+        email: 'vet2@vetapp.com',
+        password: SEED_PASSWORDS.vetB,
+      });
+      assert.strictEqual(loginBRes.status, 200);
+      const tokenB = loginBRes.body.accessToken;
+
+      const loginARes = await request(app.getHttpServer()).post('/auth/login').send({
+        email: 'reception@vetapp.com',
+        password: SEED_PASSWORDS.reception,
+      });
+      assert.strictEqual(loginARes.status, 200);
+      const tokenA = loginARes.body.accessToken;
+
+      abuseService.reset();
+
+      // 1. Crear dueño con email y mascota en Clínica A
+      const ownerEmail = 'alerta.nfc.' + Date.now() + '@example.com';
+      const owner = await prisma.owner.create({
+        data: {
+          name: 'Guillermo',
+          lastName: 'Navas',
+          email: ownerEmail,
+          phone: '+593998877665',
+          createdByClinicId: CLINIC_A_ID,
+        },
+      });
+
+      const pet = await prisma.pet.create({
+        data: {
+          name: 'Kira',
+          species: PetSpecies.CANINE,
+          ownerId: owner.id,
+          createdByClinicId: CLINIC_A_ID,
+        },
+      });
+
+      const tagUid = '04KIRA' + Date.now().toString().slice(-6);
+      await prisma.tag.create({
+        data: {
+          uid: tagUid,
+          publicCode: crypto.randomUUID(),
+          status: TagStatus.ACTIVE,
+          petId: pet.id,
+        },
+      });
+
+      try {
+        // 2. Escaneo cross-clínica desde Clínica B
+        const scanRes = await request(app.getHttpServer())
+          .get(`/tags/resolve/${tagUid}`)
+          .set('Authorization', `Bearer ${tokenB}`);
+        assert.strictEqual(scanRes.status, 200);
+        assert.strictEqual(scanRes.body.registered, true);
+
+        // Esperar unos ms a que se procese la notificación asíncrona
+        await new Promise((r) => setTimeout(r, 150));
+
+        // 3. Comprobar que en PostgreSQL real existe el registro en la tabla notifications
+        const notif = await prisma.notification.findFirst({
+          where: {
+            entityId: pet.id,
+            recipient: ownerEmail,
+          },
+        });
+        assert.ok(notif, 'Debe persistirse el registro en notifications en PostgreSQL');
+        assert.strictEqual(notif.type, 'NFC_SCAN_ALERT');
+        assert.strictEqual(notif.status, 'SENT');
+        assert.ok(notif.idempotencyKey.length > 0);
+
+        // 4. Idempotencia: segundo escaneo el mismo día no debe duplicar la notificación
+        const scanRes2 = await request(app.getHttpServer())
+          .get(`/tags/resolve/${tagUid}`)
+          .set('Authorization', `Bearer ${tokenB}`);
+        assert.strictEqual(scanRes2.status, 200);
+
+        await new Promise((r) => setTimeout(r, 150));
+
+        const countNotifs = await prisma.notification.count({
+          where: {
+            entityId: pet.id,
+            recipient: ownerEmail,
+          },
+        });
+        assert.strictEqual(countNotifs, 1, 'Idempotencia: no debe duplicar la notificación el mismo día');
+
+        // 5. Escaneo en clínica de origen (Clínica A) no debe crear notificación
+        await request(app.getHttpServer())
+          .get(`/tags/resolve/${tagUid}`)
+          .set('Authorization', `Bearer ${tokenA}`);
+        await new Promise((r) => setTimeout(r, 50));
+
+        const countAfterOrigin = await prisma.notification.count({
+          where: {
+            entityId: pet.id,
+            recipient: ownerEmail,
+          },
+        });
+        assert.strictEqual(countAfterOrigin, 1, 'Escaneo en clínica origen no debe generar alertas');
+
+        // 6. Probar tolerancia a fallos del mailer (no bloqueante)
+        const pet2 = await prisma.pet.create({
+          data: {
+            name: 'Kira2',
+            species: PetSpecies.CANINE,
+            ownerId: owner.id,
+            createdByClinicId: CLINIC_A_ID,
+          },
+        });
+        const tag2Uid = '04KIR2' + Date.now().toString().slice(-6);
+        await prisma.tag.create({
+          data: {
+            uid: tag2Uid,
+            publicCode: crypto.randomUUID(),
+            status: TagStatus.ACTIVE,
+            petId: pet2.id,
+          },
+        });
+
+        // Simular que el mailer falla
+        mailTransportService.setShouldSucceed(false);
+        try {
+          const scanWithMailerFail = await request(app.getHttpServer())
+            .get(`/tags/resolve/${tag2Uid}`)
+            .set('Authorization', `Bearer ${tokenB}`);
+          assert.strictEqual(scanWithMailerFail.status, 200, 'El fallo del mailer nunca debe bloquear el escaneo');
+          assert.strictEqual(scanWithMailerFail.body.hasFullAccess, true);
+
+          await new Promise((r) => setTimeout(r, 150));
+
+          const failedNotif = await prisma.notification.findFirst({
+            where: { entityId: pet2.id, recipient: ownerEmail },
+          });
+          assert.ok(failedNotif, 'La notificación debe crearse incluso si el mailer falla');
+          assert.strictEqual(failedNotif.status, 'FAILED');
+        } finally {
+          mailTransportService.setShouldSucceed(true);
+          await prisma.accessLog.deleteMany({ where: { petId: pet2.id } });
+          await prisma.accessGrant.deleteMany({ where: { petId: pet2.id } });
+          await prisma.notification.deleteMany({ where: { entityId: pet2.id } });
+          await prisma.tag.deleteMany({ where: { petId: pet2.id } });
+          await prisma.pet.delete({ where: { id: pet2.id } });
+        }
+
+      } finally {
+        await prisma.accessLog.deleteMany({ where: { petId: pet.id } });
+        await prisma.accessGrant.deleteMany({ where: { petId: pet.id } });
+        await prisma.clinicOwner.deleteMany({ where: { ownerId: owner.id } });
+        await prisma.notification.deleteMany({ where: { entityId: pet.id } });
+        await prisma.tag.deleteMany({ where: { petId: pet.id } });
+        await prisma.pet.delete({ where: { id: pet.id } });
+        await prisma.owner.delete({ where: { id: owner.id } });
+      }
     });
   });
 });

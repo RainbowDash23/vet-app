@@ -75,6 +75,36 @@ export class EnvironmentVariables {
   @IsOptional()
   @IsString()
   SMTP_SECURE?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  TAG_RESOLVE_LIMIT_USER?: number = 30;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  TAG_RESOLVE_TTL_USER?: number = 60000;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  TAG_RESOLVE_LIMIT_CLINIC?: number = 100;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  TAG_RESOLVE_TTL_CLINIC?: number = 60000;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  ANOMALY_RESOLVE_THRESHOLD?: number = 10;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  ANOMALY_RESOLVE_WINDOW_MS?: number = 300000;
 }
 
 export function validateEnv(config: Record<string, unknown>): EnvironmentVariables {

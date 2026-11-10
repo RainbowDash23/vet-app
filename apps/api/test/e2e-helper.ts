@@ -34,6 +34,7 @@ export interface InMemoryDb {
   vaccinations: any[];
   clinicOwners: any[];
   clinicPatients: any[];
+  notifications: any[];
 }
 
 export const SEED_PASSWORDS = {
@@ -221,6 +222,7 @@ export async function createInitialDb(): Promise<InMemoryDb> {
     clinicPatients: [
       { id: crypto.randomUUID(), clinicId: CLINIC_A_ID, petId: PET_1_ID, source: 'REGISTERED', addedAt: new Date() },
     ],
+    notifications: [],
   };
 }
 
@@ -633,6 +635,7 @@ export function createMockPrismaService(db: InMemoryDb): any {
     vaccination: createTableOps('vaccinations', 'vaccinations'),
     clinicOwner: createTableOps('clinicOwners', 'clinicOwners'),
     clinicPatient: createTableOps('clinicPatients', 'clinicPatients'),
+    notification: createTableOps('notifications', 'notifications'),
     $transaction: async (arg: any) => {
       if (typeof arg === 'function') {
         return await arg(mockPrisma);
@@ -862,6 +865,30 @@ export async function syncInMemoryDbToPostgres(prisma: any, db: InMemoryDb): Pro
       },
       update: {},
     });
+  }
+
+  // 10. Notificaciones
+  if (db.notifications) {
+    for (const n of db.notifications) {
+      await prisma.notification.upsert({
+        where: { id: n.id },
+        create: {
+          id: n.id,
+          idempotencyKey: n.idempotencyKey,
+          type: n.type,
+          entityId: n.entityId,
+          recipient: n.recipient,
+          targetDate: n.targetDate,
+          status: n.status,
+          retryCount: n.retryCount || 0,
+          errorMessage: n.errorMessage || null,
+          sentAt: n.sentAt || null,
+          createdAt: n.createdAt || new Date(),
+          updatedAt: n.updatedAt || new Date(),
+        },
+        update: {},
+      });
+    }
   }
 }
 

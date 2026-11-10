@@ -1,0 +1,9 @@
+-- AlterEnum
+ALTER TYPE "AccessAction" ADD VALUE 'NFC_RATE_LIMIT_EXCEEDED';
+ALTER TYPE "AccessAction" ADD VALUE 'NFC_SCAN_ANOMALY';
+
+-- AlterEnum
+ALTER TYPE "NotificationType" ADD VALUE 'NFC_SCAN_ALERT';
+
+-- AlterTable
+ALTER TABLE "access_logs" ALTER COLUMN "petId" DROP NOT NULL;

@@ -11,6 +11,7 @@ import {
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
+import { SkipThrottle } from '@nestjs/throttler';
 import { Role, Tag } from '@prisma/client';
 import { Request } from 'express';
 import { CurrentClinicId } from '../../common/decorators/clinic.decorator';
@@ -33,8 +34,10 @@ export class TagsController {
   /**
    * Resuelve el identificador físico de un tag NFC escaneado (RF-28, RF-29).
    * Extrae de forma segura clinicId y userId de la sesión autenticada, así como IP y User-Agent.
+   * Excluido del throttler genérico (@SkipThrottle) para aplicar el rate limiting específico por usuario y por clínica.
    */
   @Get('resolve/:uid')
+  @SkipThrottle()
   async resolve(
     @Param('uid') uid: string,
     @Req() req: Request & { user?: AuthenticatedUser },

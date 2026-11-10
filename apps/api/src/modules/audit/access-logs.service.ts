@@ -27,7 +27,7 @@ export class AccessLogsService {
     const client = tx || this.prisma;
     return client.accessLog.create({
       data: {
-        petId: createDto.petId,
+        petId: createDto.petId ?? null,
         clinicId: createDto.clinicId ?? null,
         userId: createDto.userId ?? null,
         action: createDto.action,

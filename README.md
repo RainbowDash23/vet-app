@@ -201,28 +201,57 @@ pnpm run test:e2e:db
 
 ---
 
-## 7. Alcance del MVP y Riesgos Conocidos
+## 7. Modelo de Amenazas, Alcance y Controles de Abuso
 
 ### 7.1 Alcance Implementado en esta Fase
 - **Gestión Clínica Multi-Tenant Completa:** Aislamiento criptográfico y referencial entre clínicas independientes con fail-closed en 100% de los endpoints.
 - **Padrón Centralizado con Verificación Ciega:** `POST /owners/lookup` previene registros duplicados informando la existencia sin exponer datos personales del propietario.
 - **Ficha Médica y Consultas:** Anamnesis, constantes vitales con validación fisiológica, inmutabilidad tras cierre de visita y notas evolutivas suplementarias.
 - **Identificación NFC y Transaccionalidad:** Resolución atómica en < 600 ms, reversión total ante fallo y portal web público de rescate `/p/:publicCode` con protección XSS.
-- **Notificaciones Asíncronas:** Cron de recordatorios a 72h con clave de idempotencia SHA-256 y soporte SMTP/log.
+- **Notificaciones Asíncronas y Alertas:** Cron de recordatorios a 72h con clave de idempotencia SHA-256 y avisos al dueño ante escaneos de chapas en clínicas ajenas.
 
 ### 7.2 Funcionalidades Fuera de Alcance en esta Fase
 1. **Aplicación Móvil para Dueños:** La interacción del propietario en esta fase se realiza a través de la página web pública de contingencia y rescate accesible por navegador en `/p/:publicCode`.
 2. **Segundo Factor de Autenticación con OTP:** La confirmación fuera de banda (código OTP vía SMS o correo) para autorizar el traspaso o acceso de una nueva clínica ajena queda reservada para la siguiente fase.
-3. **Autogestión de Revocación de Consentimiento:** El estado `REVOKED` en `ClinicOwner` está formalmente soportado en el modelo de datos e impide la emisión de nuevos `AccessGrant`, pero la interfaz para que el dueño revoque el acceso se implementará conjuntamente con el portal del propietario con OTP.
+3. **Autogestión de Revocación de Consentimiento:** El estado `REVOKED` en `ClinicOwner` está formalmente soportado en el modelo de datos e impide la emisión de nuevos `AccessGrant`, pero la interfaz para que el dueño revoque el acceso de forma autónoma se implementará conjuntamente con el portal del propietario con OTP.
 
-### 7.3 Riesgos Conocidos y Limitaciones Físicas
-1. **UID NFC Clonable (ISO/IEC 14443A):**
-   - Los transpondedores pasivos emiten un UID fijo de fábrica. Un clon presentado físicamente otorga un `AccessGrant` de 24 horas (`FULL_HISTORY`).
-   - *Mitigaciones activas:* Trazabilidad inmutable en `AccessLog` (`NFC_SCAN`), límite de tasa por IP/usuario con `@nestjs/throttler` y bloqueo total ante estado `REVOKED`.
-2. **Limitación de Lectura de MIFARE Classic en Smartphones:**
-   - Las tarjetas y llaveros **MIFARE Classic 1K** son compatibles con el lector de mostrador RC522 de la clínica veterinaria, pero **NO pueden ser leídos por teléfonos celulares modernos** (los iPhone y gran parte de teléfonos Android carecen de hardware compatible con MIFARE Classic).
-   - *Requisito para el producto final:* Las medallas para collares destinadas a la vía pública deben fabricarse con chips **NFC Forum Type 2** como **NTAG213** o **NTAG215**, legibles universalmente por cualquier smartphone para abrir la página pública `/p/:publicCode`.
+### 7.3 Modelo de Amenazas y Riesgos Aceptados
 
+El sistema VetApp asume un modelo de amenaza realista considerando el uso de identificadores físicos en mostrador y entornos de emergencia:
+
+#### 1. UID NFC Pasivo Clonable (ISO/IEC 14443A)
+- **Amenaza:** Los llaveros y tarjetas NFC estándar emiten un Identificador Único (UID) no cifrado. Un atacante con acceso físico temporal al llavero puede clonar el UID (ej. mediante Proxmark, Flipper Zero o aplicaciones móviles en tarjetas regrabables "Magic UID") y presentarlo en otra clínica para intentar obtener un `AccessGrant` de 24 horas (`FULL_HISTORY`).
+- **Riesgo aceptado:** No se implementa autenticación criptográfica de desafío-respuesta (challenge-response) en el chip físico para mantener la compatibilidad universal con transpondedores de bajo costo y permitir la lectura inmediata en situaciones de rescate/urgencia veterinaria.
+- **Mitigaciones implementadas:**
+  1. **Rate Limiting Granular Bivalente:** Se limita la frecuencia de escaneos por usuario y por clínica de manera independiente en `GET /tags/resolve/:uid`. Si un usuario o clínica excede el umbral, recibe `HTTP 429 Too Many Requests` en español y se genera una traza de auditoría `NFC_RATE_LIMIT_EXCEEDED` en `access_logs`.
+  2. **Detección Pasiva de Anomalías:** Si una clínica resuelve más de un umbral $N$ de mascotas distintas en una ventana corta, se emite una advertencia estructurada en logs y se audita con `NFC_SCAN_ANOMALY`. **No se bloquea el flujo** para garantizar que una urgencia médica o un albergue no queden desatendidos.
+  3. **Aviso Inmediato al Propietario (Cross-Clinic Scan):** Si una clínica distinta a la de origen escanea el llavero, se despacha un correo de alerta al dueño (si tiene email registrado). El correo incluye únicamente datos mínimos (nombre de mascota, clínica que leyó la chapa y fecha) y **cero datos clínicos, cero documentos y cero dirección física**. Posee idempotencia diaria por clínica y mascota (`sha256(nfc-alert:clinicId:petId:YYYY-MM-DD)`), y su despacho es no bloqueante (un fallo del mailer jamás interrumpe la atención médica).
+  4. **Bloqueo Inmediato por Estado Revocado:** Si el dueño solicita la revocación de una clínica (`ClinicOwner.status = 'REVOKED'`), cualquier intento de escaneo posterior responde `HTTP 403 Forbidden`, no emite grant y audita `NFC_SCAN_DENIED`.
+
+#### 2. Revocación de Acceso Pendiente de Portal del Dueño
+- **Amenaza:** Hasta la disponibilidad del portal web para dueños con validación OTP, el propietario no puede revocar directamente un vínculo desde su teléfono sin contactar a la clínica administradora.
+- **Riesgo aceptado:** La ventana de validez del consentimiento otorgado por escaneo físico es de un máximo estricto de 24 horas (`AccessGrant`), tras lo cual el acceso al historial clínico expira automáticamente sin intervención manual.
+- **Mitigaciones implementadas:**
+  1. El aviso de escaneo cross-clínica informa de inmediato al dueño el nombre de la clínica que leyó la chapa, permitiéndole advertir irregularidades rápidamente.
+  2. Los permisos de lectura no permiten mutar el historial médico previo de otras clínicas (inmutabilidad estricta).
+  3. Tras la expiración del grant de 24h, la clínica ajena pierde acceso total al expediente (`HTTP 404/403`).
+
+#### 3. Limitación de Lectura de MIFARE Classic en Smartphones
+- Las tarjetas y llaveros **MIFARE Classic 1K** son compatibles con el lector de mostrador RC522 de la clínica veterinaria, pero **no pueden ser leídos por teléfonos celulares modernos** (los iPhone y gran parte de teléfonos Android carecen de hardware compatible con MIFARE Classic).
+- *Requisito para el producto final:* Las medallas para collares destinadas a la vía pública deben fabricarse con chips **NFC Forum Type 2** como **NTAG213** o **NTAG215**, legibles universalmente por cualquier smartphone para abrir la página pública `/p/:publicCode`.
+
+### 7.4 Parámetros y Ventanas de Rate Limiting
+
+El sistema aplica límites de tasa (*rate limiting*) diferenciados y bounded sliding windows en los puntos críticos de entrada:
+
+| Endpoint / Operación | Ámbito de Rastreo | Límite por Defecto | Ventana de Tiempo | Variables de Entorno Configurables | Comportamiento al Exceder |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **`POST /auth/login`** | IP del cliente (`req.ip`, respetando `TRUST_PROXY`) | **100 peticiones** | **60 segundos** (1 min) | Hereda de `ThrottlerModule` (global) | HTTP 429 Too Many Requests |
+| **`GET /tags/resolve/:uid` (Usuario)** | ID del usuario autenticado (`userId`) | **30 escaneos** | **60 segundos** (1 min) | `TAG_RESOLVE_LIMIT_USER`<br>`TAG_RESOLVE_TTL_USER` | HTTP 429 en español + Auditoría `NFC_RATE_LIMIT_EXCEEDED` |
+| **`GET /tags/resolve/:uid` (Clínica)** | ID de la clínica de la sesión (`clinicId`) | **100 escaneos** | **60 segundos** (1 min) | `TAG_RESOLVE_LIMIT_CLINIC`<br>`TAG_RESOLVE_TTL_CLINIC` | HTTP 429 en español + Auditoría `NFC_RATE_LIMIT_EXCEEDED` |
+| **Detección de Anomalías NFC** | Mascotas distintas por clínica | **10 mascotas** | **300 segundos** (5 min) | `ANOMALY_RESOLVE_THRESHOLD`<br>`ANOMALY_RESOLVE_WINDOW_MS` | **No bloquea (200 OK)** + Log `WARN` + Auditoría `NFC_SCAN_ANOMALY` |
+| **`POST /owners/lookup`** | Usuario autenticado / IP | **10 consultas** | **60 segundos** (1 min) | Configuración de ruta `@Throttle` | HTTP 429 Too Many Requests |
+| **`GET /p/:publicCode`** | IP pública solicitante | **100 peticiones** | **60 segundos** (1 min) | Configuración de ruta `@Throttle` | HTTP 429 Too Many Requests (Página HTML sobria) |
 
 ---
 
