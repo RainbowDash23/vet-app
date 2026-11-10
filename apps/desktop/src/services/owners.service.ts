@@ -1,6 +1,7 @@
 import type {
   OwnerResponseDto,
   CreateOwnerDto,
+  UpdateOwnerDto,
   PaginatedResult,
 } from '@vet-app/shared-types';
 import { ApiClient, apiClient as defaultApiClient } from './api.client';
@@ -44,6 +45,28 @@ export class OwnersService {
       email: dto.email?.trim() || null,
       address: dto.address?.trim() || null,
     });
+  }
+
+  /**
+   * Actualiza los datos de filiación o contacto de un propietario (RF-14, RF-63).
+   */
+  public async updateOwner(id: string, dto: UpdateOwnerDto): Promise<OwnerResponseDto> {
+    const encodedId = encodeURIComponent(id.trim());
+    return this.apiClient.patch<OwnerResponseDto>(`/owners/${encodedId}`, {
+      ...(dto.name !== undefined ? { name: dto.name.trim() } : {}),
+      ...(dto.lastName !== undefined ? { lastName: dto.lastName.trim() } : {}),
+      ...(dto.phone !== undefined ? { phone: dto.phone.trim() } : {}),
+      ...(dto.email !== undefined ? { email: dto.email?.trim() || null } : {}),
+      ...(dto.address !== undefined ? { address: dto.address?.trim() || null } : {}),
+    });
+  }
+
+  /**
+   * Inactivación lógica (soft delete) de un propietario (RF-19).
+   */
+  public async deleteOwner(id: string): Promise<OwnerResponseDto> {
+    const encodedId = encodeURIComponent(id.trim());
+    return this.apiClient.delete<OwnerResponseDto>(`/owners/${encodedId}`);
   }
 
   /**

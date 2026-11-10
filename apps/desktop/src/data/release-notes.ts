@@ -6,6 +6,19 @@ export interface ReleaseNote {
 }
 
 export const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '0.2.0': {
+    version: '0.2.0',
+    title: 'Novedades de la versión 0.2.0',
+    date: 'Noviembre 2026',
+    highlights: [
+      'Auditoría integral y paridad de contratos CRUD entre la aplicación de escritorio y la API.',
+      'Edición completa de fichas de pacientes y datos de contacto de propietarios con validación sintáctica estricta.',
+      'Baja lógica de pacientes con protección ante historiales con consultas previas (HTTP 409 Conflict).',
+      'Gestión avanzada de llaveros NFC: reporte de extravío o deterioro con confirmación y reasignación ágil.',
+      'Nueva pantalla de gestión institucional para administradores: configuración de teléfono internacional E.164 y dirección que alimentan el portal público de auxilio.',
+      'Registro oficial de aplicaciones de vacunas con fecha estimada de próximo refuerzo (nextDueDate) en el carnet sanitario.',
+    ],
+  },
   '0.1.1': {
     version: '0.1.1',
     title: 'Novedades de la versión 0.1.1',

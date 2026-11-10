@@ -11,6 +11,7 @@ import { PatientFileScreen } from './screens/patient-file-screen';
 import { VisitConsultationScreen } from './screens/visit-consultation-screen';
 import { ScheduleScreen } from './screens/schedule-screen';
 import { UsersScreen } from './screens/users-screen';
+import { ClinicManagementScreen } from './screens/clinic-management-screen';
 import { QuickSearchModal } from './components/quick-search/quick-search-modal';
 import { WhatsNewModal } from './components/whats-new/whats-new-modal';
 import { UnsavedChangesDialog } from './components/screens/unsaved-changes-dialog';
@@ -312,6 +313,15 @@ export const AppContent: React.FC<AppContentProps> = ({
       case 'users':
       case 'staff-management':
         return <UsersScreen currentUserRole={role ?? undefined} />;
+      case 'clinic-management':
+        return (
+          <ClinicManagementScreen
+            currentUserRole={role ?? undefined}
+            onClinicUpdated={(c) => {
+              if (c?.name) setClinicCommercialName(c.name);
+            }}
+          />
+        );
       default:
         return (
           <PetListScreen

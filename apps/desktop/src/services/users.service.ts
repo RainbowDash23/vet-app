@@ -1,4 +1,4 @@
-import type { Role } from '@vet-app/shared-types';
+import type { Role, UpdateUserDto } from '@vet-app/shared-types';
 import { ApiClient, apiClient as defaultApiClient } from './api.client';
 
 export interface CreateUserData {
@@ -36,6 +36,16 @@ export class UsersService {
 
   public async getUsers(): Promise<UserItem[]> {
     return this.apiClient.get<UserItem[]>('/users');
+  }
+
+  public async updateUser(id: string, data: UpdateUserDto): Promise<UserItem> {
+    const encodedId = encodeURIComponent(id.trim());
+    return this.apiClient.patch<UserItem>(`/users/${encodedId}`, data);
+  }
+
+  public async deleteUser(id: string): Promise<{ success: boolean; message: string }> {
+    const encodedId = encodeURIComponent(id.trim());
+    return this.apiClient.delete<{ success: boolean; message: string }>(`/users/${encodedId}`);
   }
 }
 

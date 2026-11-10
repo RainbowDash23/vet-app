@@ -61,6 +61,7 @@ describe('T02: @vet-app/shared-types Data Contracts, DTOs and Shared Enums', () 
       'src/dtos/visit.dto.ts',
       'src/dtos/vitals.dto.ts',
       'src/dtos/visit-note.dto.ts',
+      'src/dtos/vaccination.dto.ts',
       'src/dtos/pagination.dto.ts',
       'src/interfaces/electron-api.interface.ts',
       'src/interfaces/access-grant.interface.ts',

@@ -18,6 +18,7 @@ export * from './dtos/emergency.dto';
 export * from './dtos/visit.dto';
 export * from './dtos/vitals.dto';
 export * from './dtos/visit-note.dto';
+export * from './dtos/vaccination.dto';
 export * from './dtos/pagination.dto';
 
 // Interfaces

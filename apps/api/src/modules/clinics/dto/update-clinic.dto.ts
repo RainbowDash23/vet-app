@@ -1,6 +1,6 @@
 import { UpdateClinicDto as IUpdateClinicDto } from '@vet-app/shared-types';
 import { Transform } from 'class-transformer';
-import { IsBoolean, IsEmail, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { IsBoolean, IsEmail, IsNotEmpty, IsOptional, IsString, Matches } from 'class-validator';
 
 export class UpdateClinicDto implements IUpdateClinicDto {
   @IsOptional()
@@ -11,6 +11,9 @@ export class UpdateClinicDto implements IUpdateClinicDto {
 
   @IsOptional()
   @IsString({ message: 'El teléfono debe ser una cadena de texto' })
+  @Matches(/^\+[1-9]\d{1,14}$/, {
+    message: 'El teléfono debe cumplir con el formato internacional E.164 estricto (ej. +593987654321)',
+  })
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
   phone?: string | null;
 

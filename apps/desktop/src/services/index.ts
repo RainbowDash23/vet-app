@@ -3,3 +3,7 @@ export * from './auth.service';
 export * from './pets.service';
 export * from './visits.service';
 export * from './owners.service';
+export * from './users.service';
+export * from './vaccinations.service';
+export * from './clinics.service';
+export * from './audit.service';

@@ -1,4 +1,4 @@
-import { IsEnum, IsNotEmpty } from 'class-validator';
+import { IsEnum, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 import { TagStatus } from '@prisma/client';
 
 /**
@@ -10,4 +10,8 @@ export class ReportTagStatusDto {
   })
   @IsNotEmpty({ message: 'El estado del tag es obligatorio' })
   status!: TagStatus;
+
+  @IsOptional()
+  @IsString({ message: 'El motivo del reporte debe ser una cadena de texto' })
+  reason?: string;
 }

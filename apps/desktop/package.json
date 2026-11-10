@@ -1,6 +1,6 @@
 {
   "name": "@vet-app/desktop",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "private": true,
   "description": "Cliente de escritorio para el sistema de gestión veterinaria (Electron + React + TS + Vite)",
   "main": "dist-electron/main.js",

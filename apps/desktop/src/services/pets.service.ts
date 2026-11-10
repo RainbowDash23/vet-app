@@ -1,6 +1,7 @@
 import type {
   PetResponseDto,
   CreatePetDto,
+  UpdatePetDto,
   PaginatedResult,
   ResolveTagResponseDto,
   VisitResponseDto,
@@ -107,6 +108,23 @@ export class PetsService {
    */
   public async createPet(dto: CreatePetDto): Promise<PetResponseDto> {
     return this.apiClient.post<PetResponseDto>('/pets', dto);
+  }
+
+  /**
+   * Actualiza los datos o filiación de una mascota (RF-17, RF-63).
+   */
+  public async updatePet(id: string, dto: UpdatePetDto): Promise<PetResponseDto> {
+    const encodedId = encodeURIComponent(id.trim());
+    return this.apiClient.patch<PetResponseDto>(`/pets/${encodedId}`, dto);
+  }
+
+  /**
+   * Inactivación lógica (soft delete) de una mascota y desactivación de tags (RF-19, RF-20).
+   * Si la mascota posee visitas registradas, el backend lanzará un conflicto 409.
+   */
+  public async softDeletePet(id: string): Promise<PetResponseDto> {
+    const encodedId = encodeURIComponent(id.trim());
+    return this.apiClient.delete<PetResponseDto>(`/pets/${encodedId}`);
   }
 
   /**

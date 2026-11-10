@@ -13,9 +13,13 @@ import type {
   ResolveTagUnregisteredDto,
   VisitResponseDto,
   TagResponseDto,
+  VaccinationResponseDto,
 } from '@vet-app/shared-types';
 
 import { PetsService, petsService as defaultPetsService, type VaccinationRecord } from '../services/pets.service';
+import { OwnersService, ownersService as defaultOwnersService } from '../services/owners.service';
+import { VaccinationsService, vaccinationsService as defaultVaccinationsService } from '../services/vaccinations.service';
+import { ApiError } from '../services/api.client';
 import { useNfcReader } from '../hooks/use-nfc-reader';
 import { useSafeDirtyGuard, type DirtyGuardState } from '../hooks/use-form-dirty-guard';
 import {
@@ -27,6 +31,14 @@ import {
   DialogDescription,
   DialogFooter,
   Input,
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogAction,
+  AlertDialogCancel,
 } from '../components/ui';
 import { formatPetAge } from '../utils/pet-age';
 import { resolveEmergencyUrl } from '../utils/emergency-url';
@@ -44,6 +56,9 @@ import {
   TimerIcon,
 } from '../components/ui/icons';
 import { TagAssignmentModal } from '../components/screens/tag-assignment-modal';
+import { EditOwnerModal } from '../components/screens/edit-owner-modal';
+import { EditPetModal } from '../components/screens/edit-pet-modal';
+import { AddVaccinationModal } from '../components/screens/add-vaccination-modal';
 import styles from './patient-file-screen.module.css';
 
 export interface PatientFileScreenProps {
@@ -72,9 +87,17 @@ export interface PatientFileScreenProps {
    */
   onBack?: () => void;
   /**
-   * Inyección del servicio de datos (útil para pruebas unitarias).
+   * Inyección del servicio de mascotas (útil para pruebas unitarias).
    */
   petsService?: PetsService;
+  /**
+   * Inyección del servicio de propietarios.
+   */
+  ownersService?: OwnersService;
+  /**
+   * Inyección del servicio de vacunas.
+   */
+  vaccinationsService?: VaccinationsService;
   /**
    * Guardia de navegación para intercepción de cambios no guardados (RF-33).
    */
@@ -119,6 +142,8 @@ export const PatientFileScreen: React.FC<PatientFileScreenProps> = ({
   onUnregisteredTag,
   onBack,
   petsService = defaultPetsService,
+  ownersService = defaultOwnersService,
+  vaccinationsService = defaultVaccinationsService,
   dirtyGuard: propsDirtyGuard,
   initialData,
   initialUnregistered,
@@ -149,11 +174,27 @@ export const PatientFileScreen: React.FC<PatientFileScreenProps> = ({
   const [copiedLink, setCopiedLink] = useState<boolean>(false);
 
   // Estados de lista de pacientes (roster), tags y modal de vinculación
-  const [petTags, setPetTags] = useState<TagResponseDto[]>([]);
+  const [petTags, setPetTags] = useState<TagResponseDto[]>(
+    (initialData?.pet as PetResponseDto)?.tags || []
+  );
   const [showTagModal, setShowTagModal] = useState<boolean>(false);
   const [tagModalUid, setTagModalUid] = useState<string>('');
   const [isSubmittingTag, setIsSubmittingTag] = useState<boolean>(false);
   const [tagModalError, setTagModalError] = useState<string | null>(null);
+
+  // Modales y diálogos CRUD (RF-14, RF-17, RF-19, RF-32, RF-48)
+  const [showEditOwnerModal, setShowEditOwnerModal] = useState<boolean>(false);
+  const [showEditPetModal, setShowEditPetModal] = useState<boolean>(false);
+  const [showAddVaccinationModal, setShowAddVaccinationModal] = useState<boolean>(false);
+  const [showDeletePetDialog, setShowDeletePetDialog] = useState<boolean>(false);
+  const [isDeletingPet, setIsDeletingPet] = useState<boolean>(false);
+  const [deletePetError, setDeletePetError] = useState<string | null>(null);
+  const [tagStatusDialog, setTagStatusDialog] = useState<{
+    isOpen: boolean;
+    status: TagStatus;
+    label: string;
+  } | null>(null);
+  const [isUpdatingTagStatus, setIsUpdatingTagStatus] = useState<boolean>(false);
 
   const [isInRoster, setIsInRoster] = useState<boolean>(
     Boolean(initialData?.isInRoster || (initialData?.pet as PetResponseDto)?.isInRoster)
@@ -197,7 +238,6 @@ export const PatientFileScreen: React.FC<PatientFileScreenProps> = ({
     let isMounted = true;
     if (data?.publicCode) {
       setPublicCode(data.publicCode);
-      return;
     }
     const targetPetId = (data?.pet as PetResponseDto)?.id || petId;
     if (isOriginClinic && targetPetId) {
@@ -213,7 +253,7 @@ export const PatientFileScreen: React.FC<PatientFileScreenProps> = ({
           }
         })
         .catch(() => {});
-    } else {
+    } else if (!data?.publicCode) {
       setPublicCode(null);
     }
     return () => {
@@ -301,6 +341,77 @@ export const PatientFileScreen: React.FC<PatientFileScreenProps> = ({
         setIsAddingToRoster(false);
       }
     }
+  };
+
+  const handleDeletePet = async () => {
+    const targetPetId = (data?.pet as PetResponseDto)?.id || petId;
+    if (!targetPetId) return;
+
+    setIsDeletingPet(true);
+    setDeletePetError(null);
+    try {
+      await petsService.softDeletePet(targetPetId);
+      setShowDeletePetDialog(false);
+      onBack?.();
+    } catch (err: unknown) {
+      if (!isMountedRef.current) return;
+      const msg =
+        err instanceof ApiError
+          ? err.message
+          : err instanceof Error
+          ? err.message
+          : 'Error al dar de baja al paciente';
+      setDeletePetError(msg);
+    } finally {
+      if (isMountedRef.current) {
+        setIsDeletingPet(false);
+      }
+    }
+  };
+
+  const handleConfirmTagStatus = async () => {
+    if (!activeTag || !tagStatusDialog) return;
+    setIsUpdatingTagStatus(true);
+    try {
+      await petsService.reportTagStatus(activeTag.id, {
+        status: tagStatusDialog.status,
+        reason: `Reporte de ${tagStatusDialog.label}`,
+      });
+      setTagStatusDialog(null);
+      const targetPetId = (data?.pet as PetResponseDto)?.id || petId;
+      if (targetPetId) {
+        await loadByPetId(targetPetId);
+      }
+    } catch (err: unknown) {
+      const msg =
+        err instanceof ApiError
+          ? err.message
+          : err instanceof Error
+          ? err.message
+          : 'Error al reportar el estado del llavero';
+      setTagModalError(msg);
+    } finally {
+      if (isMountedRef.current) {
+        setIsUpdatingTagStatus(false);
+      }
+    }
+  };
+
+  const handleVaccinationCreated = (newVac: VaccinationResponseDto) => {
+    setVaccinations((prev) => [
+      {
+        id: newVac.id,
+        petId: newVac.petId,
+        vaccineName: newVac.vaccineName,
+        batchNumber: newVac.batchNumber,
+        appliedAt: newVac.appliedAt,
+        nextDueDate: newVac.nextDueDate,
+        notes: newVac.notes,
+        clinic: newVac.clinic,
+        veterinarian: newVac.veterinarian,
+      },
+      ...prev,
+    ]);
   };
 
   const onUnregisteredTagRef = useRef(onUnregisteredTag);
@@ -671,9 +782,34 @@ export const PatientFileScreen: React.FC<PatientFileScreenProps> = ({
               {getSpeciesAvatar(pet.species)}
             </div>
             <div>
-              <h1 id="pet-title" className={styles.petName}>
-                {pet.name}
-              </h1>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
+                <h1 id="pet-title" className={styles.petName}>
+                  {pet.name}
+                </h1>
+                {(isAdmin || isReception) && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowEditPetModal(true)}
+                    data-testid="edit-pet-button"
+                  >
+                    Editar Mascota
+                  </Button>
+                )}
+                {isAdmin && (
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => {
+                      setDeletePetError(null);
+                      setShowDeletePetDialog(true);
+                    }}
+                    data-testid="delete-pet-button"
+                  >
+                    Dar de baja
+                  </Button>
+                )}
+              </div>
               <p className={styles.petSub}>
                 {getSpeciesLabel(pet.species)} • {breed} • {getSexLabel(pet.sex)}
               </p>
@@ -734,7 +870,19 @@ export const PatientFileScreen: React.FC<PatientFileScreenProps> = ({
         <div className={styles.filiationGrid}>
           <div className={styles.dataItem}>
             <span className={styles.dataLabel}>Propietario</span>
-            <span className={styles.dataValue}>{ownerName || 'No especificado'}</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+              <span className={styles.dataValue}>{ownerName || 'No especificado'}</span>
+              {(isAdmin || isReception) && fullPet?.owner && (
+                <button
+                  type="button"
+                  className={styles.editActionLink}
+                  onClick={() => setShowEditOwnerModal(true)}
+                  data-testid="edit-owner-button"
+                >
+                  Editar
+                </button>
+              )}
+            </div>
           </div>
           <div className={styles.dataItem}>
             <span className={styles.dataLabel}>Teléfono de Contacto</span>
@@ -742,17 +890,51 @@ export const PatientFileScreen: React.FC<PatientFileScreenProps> = ({
           </div>
           <div className={styles.dataItem}>
             <span className={styles.dataLabel}>Estado del Tag</span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
               <span className={styles.dataValue}>{tagStatus}</span>
               {canManageTags && (
-                <button
-                  type="button"
-                  className={styles.tagActionLink}
-                  onClick={() => setShowTagModal(true)}
-                  data-testid="tag-manage-button"
-                >
-                  {activeTag ? 'Reemplazar llavero' : 'Asignar llavero'}
-                </button>
+                <>
+                  <button
+                    type="button"
+                    className={styles.tagActionLink}
+                    onClick={() => setShowTagModal(true)}
+                    data-testid="tag-manage-button"
+                  >
+                    {activeTag ? 'Reemplazar llavero' : 'Asignar llavero'}
+                  </button>
+                  {activeTag && (
+                    <>
+                      <button
+                        type="button"
+                        className={styles.dangerActionLink}
+                        onClick={() =>
+                          setTagStatusDialog({
+                            isOpen: true,
+                            status: TagStatus.LOST,
+                            label: 'extraviado',
+                          })
+                        }
+                        data-testid="tag-mark-lost-button"
+                      >
+                        Marcar extraviado
+                      </button>
+                      <button
+                        type="button"
+                        className={styles.dangerActionLink}
+                        onClick={() =>
+                          setTagStatusDialog({
+                            isOpen: true,
+                            status: TagStatus.DAMAGED,
+                            label: 'deteriorado',
+                          })
+                        }
+                        data-testid="tag-mark-damaged-button"
+                      >
+                        Marcar deteriorado
+                      </button>
+                    </>
+                  )}
+                </>
               )}
             </div>
           </div>
@@ -1057,7 +1239,21 @@ export const PatientFileScreen: React.FC<PatientFileScreenProps> = ({
               aria-labelledby="tab-vaccines"
               className={styles.tabPanel}
             >
-              <h2 className={styles.sectionTitle}>Registro Oficial de Vacunación</h2>
+              <div className={styles.sectionHeaderWithAction}>
+                <h2 className={styles.sectionTitle} style={{ margin: 0 }}>
+                  Registro Oficial de Vacunación
+                </h2>
+                {(effectiveRole === 'VET' || effectiveRole === Role.VET || isAdmin) && (
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => setShowAddVaccinationModal(true)}
+                    data-testid="add-vaccine-button"
+                  >
+                    Registrar Vacuna
+                  </Button>
+                )}
+              </div>
 
               {vaccinations.length === 0 ? (
                 <div className={styles.emptyState}>
@@ -1160,6 +1356,139 @@ export const PatientFileScreen: React.FC<PatientFileScreenProps> = ({
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Modal para Editar Propietario */}
+      <EditOwnerModal
+        isOpen={showEditOwnerModal}
+        owner={fullPet?.owner ?? null}
+        onClose={() => setShowEditOwnerModal(false)}
+        onOwnerUpdated={(updatedOwner) => {
+          setData((prev) => {
+            if (!prev || !prev.pet) return prev;
+            return {
+              ...prev,
+              pet: {
+                ...prev.pet,
+                owner: updatedOwner,
+              },
+            };
+          });
+        }}
+        ownersService={ownersService}
+      />
+
+      {/* Modal para Editar Paciente */}
+      <EditPetModal
+        isOpen={showEditPetModal}
+        pet={fullPet ?? null}
+        onClose={() => setShowEditPetModal(false)}
+        onPetUpdated={(updatedPet) => {
+          setData((prev) => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              pet: {
+                ...(prev.pet as PetResponseDto),
+                ...updatedPet,
+                owner: (prev.pet as PetResponseDto)?.owner,
+              },
+            };
+          });
+        }}
+        petsService={petsService}
+      />
+
+      {/* Modal para Registrar Vacuna */}
+      <AddVaccinationModal
+        isOpen={showAddVaccinationModal}
+        petId={((data?.pet as PetResponseDto)?.id || petId) ?? ''}
+        onClose={() => setShowAddVaccinationModal(false)}
+        onVaccinationCreated={handleVaccinationCreated}
+        vaccinationsService={vaccinationsService}
+      />
+
+      {/* Diálogo de Confirmación para Baja de Paciente */}
+      <AlertDialog
+        open={showDeletePetDialog}
+        onOpenChange={(open) => !open && setShowDeletePetDialog(false)}
+      >
+        <AlertDialogContent aria-describedby="delete-pet-alert-desc">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar Baja de Paciente</AlertDialogTitle>
+            <AlertDialogDescription id="delete-pet-alert-desc">
+              ¿Está seguro de que desea inactivar la ficha clínica de {pet.name}? Esta acción dará de
+              baja al paciente del padrón activo y desactivará sus llaveros vinculados.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {deletePetError && (
+            <div
+              style={{
+                color: 'var(--color-danger)',
+                fontSize: 'var(--font-size-sm)',
+                margin: 'var(--space-2) 0',
+              }}
+              role="alert"
+            >
+              {deletePetError}
+            </div>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              disabled={isDeletingPet}
+              onClick={() => setShowDeletePetDialog(false)}
+            >
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={isDeletingPet}
+              onClick={(e) => {
+                e.preventDefault();
+                void handleDeletePet();
+              }}
+              style={{ backgroundColor: 'var(--color-danger)', color: '#ffffff' }}
+            >
+              {isDeletingPet ? 'Dando de baja...' : 'Confirmar Baja'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Diálogo de Confirmación para Reportar Llavero como Extraviado o Deteriorado */}
+      <AlertDialog
+        open={!!tagStatusDialog}
+        onOpenChange={(open) => !open && setTagStatusDialog(null)}
+      >
+        <AlertDialogContent aria-describedby="tag-status-alert-desc">
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Reportar Llavero como{' '}
+              {tagStatusDialog?.label === 'extraviado' ? 'Extraviado' : 'Deteriorado'}
+            </AlertDialogTitle>
+            <AlertDialogDescription id="tag-status-alert-desc">
+              ¿Confirmar que el llavero con UID "{activeTag?.uid}" se encuentra{' '}
+              {tagStatusDialog?.label}? El transpondedor quedará inactivo de inmediato en el sistema.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              disabled={isUpdatingTagStatus}
+              onClick={() => setTagStatusDialog(null)}
+            >
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={isUpdatingTagStatus}
+              onClick={(e) => {
+                e.preventDefault();
+                void handleConfirmTagStatus();
+              }}
+              style={{ backgroundColor: 'var(--color-danger)', color: '#ffffff' }}
+            >
+              {isUpdatingTagStatus ? 'Actualizando...' : 'Confirmar Reporte'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

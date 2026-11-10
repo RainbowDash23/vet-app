@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsEnum, IsInt, IsOptional, IsUUID, Max, Min } from 'class-validator';
+import { IsEnum, IsInt, IsOptional, IsString, IsUUID, Max, Min } from 'class-validator';
 import { VisitStatus } from '@prisma/client';
 
 /**
@@ -7,12 +7,20 @@ import { VisitStatus } from '@prisma/client';
  */
 export class QueryVisitDto {
   @IsOptional()
+  @IsUUID('4', { message: 'El clinicId debe ser un UUID v4 válido' })
+  clinicId?: string;
+
+  @IsOptional()
   @IsUUID('4', { message: 'El petId debe ser un UUID v4 válido' })
   petId?: string;
 
   @IsOptional()
   @IsUUID('4', { message: 'El vetId debe ser un UUID v4 válido' })
   vetId?: string;
+
+  @IsOptional()
+  @IsString({ message: 'La fecha debe ser una cadena de texto' })
+  date?: string;
 
   @IsOptional()
   @IsEnum(VisitStatus, {

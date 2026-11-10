@@ -144,6 +144,20 @@ export class VisitsService {
       where.status = queryDto.status;
     }
 
+    if (queryDto?.date) {
+      const parsed = new Date(queryDto.date);
+      if (!isNaN(parsed.getTime())) {
+        const start = new Date(queryDto.date);
+        start.setUTCHours(0, 0, 0, 0);
+        const end = new Date(queryDto.date);
+        end.setUTCHours(23, 59, 59, 999);
+        where.scheduledDate = {
+          gte: start,
+          lte: end,
+        };
+      }
+    }
+
     const [data, total] = await Promise.all([
       this.prisma.visit.findMany({
         where,

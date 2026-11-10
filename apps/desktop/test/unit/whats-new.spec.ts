@@ -133,6 +133,19 @@ describe('Gestor de Novedades de Versión (whats-new.manager.ts & release-notes.
       }
     });
 
+    it('debe contener notas estructuradas en español para la versión 0.2.0', () => {
+      const notes020 = getReleaseNotesForVersion('0.2.0');
+      assert.ok(notes020, 'Deben existir notas para v0.2.0');
+      assert.strictEqual(notes020?.version, '0.2.0');
+      assert.ok(notes020?.title.includes('0.2.0'));
+      assert.ok(Array.isArray(notes020?.highlights));
+      assert.ok(notes020.highlights.length >= 3, 'Debe incluir al menos 3 puntos destacados');
+
+      for (const highlight of notes020.highlights) {
+        assert.doesNotMatch(highlight, /[\u{1F300}-\u{1F9FF}]/u, 'No debe contener emojis');
+      }
+    });
+
     it('retorna undefined para versiones inexistentes', () => {
       const notes = getReleaseNotesForVersion('99.9.9');
       assert.strictEqual(notes, undefined);

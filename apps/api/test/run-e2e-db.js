@@ -105,6 +105,7 @@ function checkPostgresReachable(databaseUrl, defaultHost = '127.0.0.1', defaultP
       'test/access-policy-leaks.e2e-spec.ts',
       'test/rollback.db-spec.ts',
       'test/bootstrap-admin.db-spec.ts',
+      'test/crud-contracts.e2e-spec.ts',
     ],
     {
       stdio: 'inherit',

@@ -9,6 +9,7 @@ export interface AssignTagDto {
 
 export interface ReportTagStatusDto {
   status: TagStatus;
+  reason?: string;
 }
 
 export interface TagResponseDto {
