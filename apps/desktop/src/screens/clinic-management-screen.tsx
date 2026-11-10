@@ -69,7 +69,7 @@ export const ClinicManagementScreen: React.FC<ClinicManagementScreenProps> = ({
     register,
     handleSubmit,
     reset,
-    formState: { errors, isDirty },
+    formState: { errors },
   } = useForm<ClinicFormValues>({
     resolver: zodResolver(clinicFormSchema),
     defaultValues: {
