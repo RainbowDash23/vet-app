@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { AccessAction, TagStatus } from '@prisma/client';
-import { PetSpecies } from '@vet-app/shared-types';
+import { PetSpecies, PetSex } from '@vet-app/shared-types';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AccessLogsService } from '../audit/access-logs.service';
 import { EmergencyPetProfileDto } from './dto/emergency-pet-profile.dto';
@@ -108,6 +108,7 @@ export class EmergencyService {
       petName: tag.pet.name,
       species: tag.pet.species as unknown as PetSpecies,
       breed: tag.pet.breed ?? null,
+      sex: (tag.pet.sex as unknown as PetSex) ?? null,
       ownerName: `${tag.pet.owner.name} ${tag.pet.owner.lastName}`.trim(),
       ownerPhone: tag.pet.owner.phone,
       ownerSecondaryPhone: null,

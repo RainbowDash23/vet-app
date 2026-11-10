@@ -2,7 +2,7 @@ import { describe, it, beforeEach } from 'node:test';
 import * as assert from 'node:assert';
 import { NotFoundException } from '@nestjs/common';
 import { AccessAction, TagStatus } from '@prisma/client';
-import { PetSpecies } from '@vet-app/shared-types';
+import { PetSpecies, PetSex } from '@vet-app/shared-types';
 import { EmergencyService } from '../../src/modules/emergency/emergency.service';
 import { EmergencyController } from '../../src/modules/emergency/emergency.controller';
 import { GUARDS_METADATA } from '@nestjs/common/constants';
@@ -22,6 +22,7 @@ interface MockPet {
   name: string;
   species: PetSpecies;
   breed: string | null;
+  sex?: PetSex | string | null;
   notes: string | null;
   ownerId: string;
   deletedAt: Date | null;
@@ -85,6 +86,7 @@ describe('EmergencyService & EmergencyController (T17 / RF-35, RF-36, RF-37, RF-
     name: 'Firulais',
     species: PetSpecies.CANINE,
     breed: 'Golden Retriever',
+    sex: PetSex.MALE,
     notes: 'Alergia severa a penicilinas y notas médicas confidenciales',
     ownerId: sampleOwner.id,
     deletedAt: null,
@@ -168,6 +170,7 @@ describe('EmergencyService & EmergencyController (T17 / RF-35, RF-36, RF-37, RF-
       assert.strictEqual(profile.petName, 'Firulais');
       assert.strictEqual(profile.species, PetSpecies.CANINE);
       assert.strictEqual(profile.breed, 'Golden Retriever');
+      assert.strictEqual(profile.sex, PetSex.MALE);
       assert.strictEqual(profile.ownerName, 'Carlos Santana');
       assert.strictEqual(profile.ownerPhone, '+593991234567');
       assert.strictEqual(profile.ownerSecondaryPhone, null);
@@ -183,6 +186,7 @@ describe('EmergencyService & EmergencyController (T17 / RF-35, RF-36, RF-37, RF-
         'ownerPhone',
         'ownerSecondaryPhone',
         'petName',
+        'sex',
         'species',
       ].sort();
 
