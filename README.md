@@ -576,3 +576,95 @@ gh api -X DELETE repos/RainbowDash23/vet-app/releases/<RELEASE_ID>
 El módulo de comunicación por puerto serial (`serialport` / `@serialport/bindings-cpp`) está empaquetado fuera del archivo `.asar` mediante la directiva `asarUnpack`, cargando los binarios precompilados de Node-API (`npmRebuild: false`):
 - Al conectar una placa lectora ESP32 por USB, la aplicación autodetecta los chips CP210x o CH340 (`10C4:EA60` o `1A86:7523`) y los lista en la interfaz sin requerir compiladores de C++ ni dependencias externas.
 - Los manejadores de simulación (`nfc:simulate-tag`) permanecen deshabilitados en la aplicación empaquetada para prevenir inyecciones artificiales en entornos de producción, salvo activación explícita mediante la variable de desarrollo `VITE_DEV_TOOLS=true`.
+
+---
+
+## 10. Operación, Respaldos y Disponibilidad Continua
+
+### 10.1 Mantener Despierta la API en la Nube (Pinger Externo Gratuito)
+
+En entornos de producción alojados sobre los planes gratuitos de Render y Neon, existen dos capas de suspensión con comportamientos distintos:
+
+1. **Suspensión de Render Web Service (Contenedor):** Render suspende (*spin down*) el servicio web tras 15 minutos de inactividad de tráfico HTTP. La siguiente petición entrante experimenta un arranque en frío (*cold start*) de 50 a 70 segundos mientras el contenedor se descarga e inicia.
+2. **Suspensión de Neon Serverless (Base de Datos):** Neon suspende su instancia de cómputo tras 5 minutos de inactividad, ofreciendo una cuota mensual gratuita de 100 Compute Unit-horas (CU-h).
+3. **Estrategia Óptima con Pinger Externo (cron-job.org / UptimeRobot):**
+   - Configure un pinger externo gratuito que realice una petición HTTP `GET` periódica a:
+     ```
+     https://TU-SERVICIO.onrender.com/health
+     ```
+   - **Frecuencia recomendada:** Cada 10 minutos (por ejemplo mediante la regla cron `*/10 * * * *`).
+   - **Aislamiento arquitectónico clave:** El endpoint `GET /health` es un *liveness probe* que **no consulta la base de datos** (a diferencia de `GET /health/ready`, que ejecuta `SELECT 1`).
+   - **Beneficios combinados:**
+     - Al recibir tráfico cada 10 minutos (dentro de la ventana de 15 minutos), Render **nunca se suspende** y permanece caliente y disponible 24/7.
+     - Al no tocar PostgreSQL, Neon **permanece suspendido** durante los periodos de inactividad clínica, preservando al 100% las 100 CU-horas mensuales del plan gratuito.
+     - Cuando una clínica realiza una consulta o atención médica real, el servicio web responde de inmediato y solo espera el despertar instantáneo de Neon (2 a 3 segundos), eliminando por completo los arranques en frío de 90 segundos.
+
+#### Configuración Paso a Paso en cron-job.org:
+1. Regístrese gratuitamente en [cron-job.org](https://cron-job.org).
+2. Cree un nuevo cron job con los siguientes parámetros:
+   - **Title:** `VetApp Production Liveness Ping`
+   - **URL:** `https://TU-SERVICIO.onrender.com/health` (reemplace por su dominio de Render)
+   - **Schedule:** Cada 10 minutos (`Every 10 minutes`).
+   - **Request Method:** `GET`
+   - **Failure Notifications:** Activadas para alertar si el servicio sufriese alguna caída no programada.
+
+---
+
+### 10.2 Copia de Seguridad Local de Base de Datos (`pnpm db:backup`)
+
+VetApp incluye una herramienta para realizar volcados completos y consistentes de la base de datos sin requerir herramientas cliente de PostgreSQL instaladas en el sistema anfitrión:
+
+```bash
+# 1. Configurar la URL de conexión directa en la sesión de terminal:
+# En Linux/macOS:
+export BACKUP_DATABASE_URL="postgresql://user:password@ep-xyz.neon.tech/vet_app_db?sslmode=require"
+# En Windows PowerShell:
+$env:BACKUP_DATABASE_URL="postgresql://user:password@ep-xyz.neon.tech/vet_app_db?sslmode=require"
+
+# 2. Ejecutar la copia de seguridad:
+pnpm db:backup
+```
+
+#### Características y Garantías de Seguridad:
+- **Motor homogéneo con Neon:** Ejecuta `pg_dump` mediante el contenedor oficial `postgres:16-alpine`, garantizando compatibilidad binaria idéntica con el motor de Neon PostgreSQL 16.
+- **Cero fugas de credenciales:** La variable `BACKUP_DATABASE_URL` se lee exclusivamente desde el entorno en memoria; nunca se almacena en archivos del repositorio ni se imprime en consola o logs (las URLs en mensajes de diagnóstico son sanitizadas mostrando contraseñas enmascaradas `***`).
+- **Almacenamiento seguro fuera del repositorio:** El volcado comprimido (`.sql.gz`) se genera con marca de tiempo ISO (ej. `vetapp-backup-20261109-210000.sql.gz`) en el directorio del usuario (`~/.vetapp-backups`), fuera del alcance de Git. Adicionalmente, `.gitignore` contiene reglas estrictas (`backups/`, `*.sql.gz`, `*.sql`) para prevenir cualquier añadido accidental.
+
+> [!CAUTION]
+> **Prohibido subir copias a GitHub Actions o repositorios públicos**
+> Los volcados de base de datos contienen historias clínicas, datos de dueños y pacientes. Los artefactos de ejecución en repositorios públicos de GitHub son accesibles y descargables por cualquier usuario de internet. Las copias de seguridad de VetApp deben residir estrictamente en almacenamiento local cifrado o bóvedas privadas fuera de la infraestructura pública.
+
+---
+
+### 10.3 Verificación de Restauración (`pnpm db:restore:verify`)
+
+> [!IMPORTANT]
+> **Neon Free conserva únicamente 6 horas de historial (Point-in-Time Recovery)**
+> En el plan gratuito de Neon, la ventana de recuperación temporal ante desastres es de solo 6 horas. Transcurrido ese periodo, la base de datos en la nube carece de historial de versiones previo. Por este motivo, **la copia de seguridad local es la copia de seguridad real y duradera**.
+
+Para auditar y validar periódicamente que los archivos `.sql.gz` son íntegros y restaurables sin errores de sintaxis ni pérdidas de información, ejecute:
+
+```bash
+pnpm db:restore:verify
+```
+
+#### Flujo Automatizado de Verificación:
+1. Localiza automáticamente la última copia `.sql.gz` en el directorio de respaldos (`~/.vetapp-backups`).
+2. Verifica que el contenedor local `vet_app_postgres` esté activo mediante Docker Compose (levantándolo si fuese necesario).
+3. Crea una base de datos temporal limpia (`vet_app_restore_verify`).
+4. Descomprime en streaming el volcado y lo restaura con `psql` activando `ON_ERROR_STOP=1`.
+5. Ejecuta una consulta analítica unificada sobre todas las tablas clave del sistema:
+   - `clinics`, `users`, `owners`, `pets`, `tags`, `visits`, `access_logs`, `access_grants`, `notifications`.
+6. Imprime una tabla estructurada con el recuento exacto de registros restaurados.
+7. Elimina automáticamente la base de datos temporal para no dejar residuos (o la preserva si se invoca con `--keep-db`).
+
+---
+
+### 10.4 Dependabot y Auditoría Continua de Dependencias
+
+1. **Dependabot (.github/dependabot.yml):**
+   - Configurado con escaneo semanal para dependencias de **npm** (monorepo con pnpm) y flujos de trabajo de **GitHub Actions**.
+   - Aplica agrupamiento inteligente (`groups`) para consolidar actualizaciones de parches y versiones menores en un único Pull Request semanal, minimizando el ruido en el repositorio.
+2. **Auditoría de Seguridad en CI (`pnpm audit`):**
+   - El pipeline de GitHub Actions incluye un trabajo automatizado de auditoría (`audit`) que analiza vulnerabilidades conocidas en las dependencias.
+   - Opera en modo **informativo (no bloqueante)** mediante `continue-on-error: true`, garantizando visibilidad transparente de avisos de seguridad sin bloquear despliegues o correcciones críticas.

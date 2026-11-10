@@ -20,6 +20,30 @@ jobs:
         run: |
           docker run --rm -v "${{ github.workspace }}:/repo" zricethezav/gitleaks:v8.30.1 detect --source="/repo" -v --no-banner --gitleaks-ignore-path="/repo/.gitleaksignore"
 
+  audit:
+    name: Dependency Audit (pnpm audit)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: '11.15.1'
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Run Informational Security Audit
+        run: |
+          echo "Ejecutando pnpm audit en modo informativo (no bloqueante)..."
+          pnpm audit || true
+        continue-on-error: true
+
   test-and-verify:
     name: Build, Lint & Test Suite
     runs-on: ubuntu-latest

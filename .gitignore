@@ -37,6 +37,14 @@ firmware/config.py
 release-state.json
 **/release-state.json
 
+# Database backups (prohibido almacenar o subir copias al repositorio)
+backups/
+**/backups/
+.vetapp-backups/
+**/.vetapp-backups/
+*.sql.gz
+*.sql
+
 # Logs
 *.log
 npm-debug.log*

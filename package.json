@@ -8,6 +8,8 @@
     "build:api": "pnpm --filter @vet-app/api build",
     "db:up": "docker compose up -d",
     "db:down": "docker compose down",
+    "db:backup": "node scripts/db-backup.js",
+    "db:restore:verify": "node scripts/db-restore-verify.js",
     "prisma:generate": "pnpm --filter @vet-app/api prisma:generate",
     "dev:desktop": "pnpm --filter @vet-app/desktop dev",
     "dev:electron": "pnpm --filter @vet-app/desktop dev:electron",
