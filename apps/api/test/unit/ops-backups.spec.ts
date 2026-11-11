@@ -12,6 +12,8 @@ const {
   resolveDockerHost,
   validateBackupEnvironment,
   POSTGRES_IMAGE,
+  DEFAULT_PG_VERSION,
+  getPostgresImage,
 } = require('../../../../scripts/db-backup.js');
 
 const {
@@ -41,6 +43,45 @@ describe('Operaciones y Copias de Seguridad (feat/ops-backups)', () => {
       const testUrl = 'postgresql://vet_admin:Secret123@neon.tech:5432/vet_app_db?sslmode=require';
       const result = validateBackupEnvironment({ BACKUP_DATABASE_URL: testUrl });
       assert.strictEqual(result, testUrl);
+    });
+
+    it('validateBackupEnvironment debe abortar con error explicativo si BACKUP_DATABASE_URL contiene -pooler', () => {
+      const poolerUrl = 'postgresql://admin_user:SuperSecretPassword123@ep-cool-pooler.us-east-2.aws.neon.tech:5432/vet_db?sslmode=require';
+      assert.throws(
+        () => validateBackupEnvironment({ BACKUP_DATABASE_URL: poolerUrl }),
+        (err: Error) => {
+          assert.match(err.message, /pooler de conexiones/);
+          assert.match(err.message, /DIRECT_URL/);
+          assert.doesNotMatch(err.message, /SuperSecretPassword123/, 'NUNCA debe imprimir la contraseña en texto claro');
+          assert.match(err.message, /admin_user:\*\*\*@/, 'Debe enmascarar la contraseña en el diagnóstico');
+          return true;
+        },
+      );
+    });
+
+    it('validateBackupEnvironment debe abortar con error si BACKUP_DATABASE_URL contiene pgbouncer=true', () => {
+      const pgbouncerUrl = 'postgresql://admin_user:PgbouncerSecretPass!@ep-cool.neon.tech:5432/vet_db?sslmode=require&pgbouncer=true';
+      assert.throws(
+        () => validateBackupEnvironment({ BACKUP_DATABASE_URL: pgbouncerUrl }),
+        (err: Error) => {
+          assert.match(err.message, /pooler de conexiones/);
+          assert.doesNotMatch(err.message, /PgbouncerSecretPass!/, 'NUNCA debe imprimir la contraseña');
+          assert.match(err.message, /admin_user:\*\*\*@/);
+          return true;
+        },
+      );
+    });
+
+    it('validateBackupEnvironment debe abortar con error si BACKUP_DATABASE_URL apunta al puerto 6543 de pooler', () => {
+      const portUrl = 'postgresql://admin_user:MyPortPassword99@ep-cool.neon.tech:6543/vet_db?sslmode=require';
+      assert.throws(
+        () => validateBackupEnvironment({ BACKUP_DATABASE_URL: portUrl }),
+        (err: Error) => {
+          assert.match(err.message, /pooler de conexiones/);
+          assert.doesNotMatch(err.message, /MyPortPassword99/);
+          return true;
+        },
+      );
     });
 
     it('sanitizeDatabaseUrl debe enmascarar contraseñas en URLs de base de datos', () => {
@@ -88,8 +129,15 @@ describe('Operaciones y Copias de Seguridad (feat/ops-backups)', () => {
       assert.match(cloud, /ep-cloud\.neon\.tech:5432/, 'No debe alterar endpoints de Neon en la nube');
     });
 
-    it('POSTGRES_IMAGE debe coincidir con la versión oficial 16 de Neon', () => {
-      assert.strictEqual(POSTGRES_IMAGE, 'postgres:16-alpine');
+    it('DEFAULT_PG_VERSION y POSTGRES_IMAGE deben usar la versión 18 por defecto', () => {
+      assert.strictEqual(DEFAULT_PG_VERSION, '18');
+      assert.strictEqual(POSTGRES_IMAGE, 'postgres:18-alpine');
+    });
+
+    it('getPostgresImage debe permitir override mediante argumento o variable BACKUP_PG_VERSION', () => {
+      assert.strictEqual(getPostgresImage('18'), 'postgres:18-alpine');
+      assert.strictEqual(getPostgresImage('17'), 'postgres:17-alpine');
+      assert.strictEqual(getPostgresImage('16'), 'postgres:16-alpine');
     });
   });
 
@@ -174,7 +222,7 @@ notifications|3
 
     it('constantes de base de datos temporal deben ser seguras y consistentes', () => {
       assert.strictEqual(TEMP_DB_NAME, 'vet_app_restore_verify');
-      assert.strictEqual(CONTAINER_NAME, 'vet_app_postgres');
+      assert.strictEqual(CONTAINER_NAME, 'vet_app_restore_verify');
     });
   });
 

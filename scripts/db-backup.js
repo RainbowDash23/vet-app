@@ -3,8 +3,8 @@
 /**
  * Script de Copia de Seguridad Local de Base de Datos para VetApp (pnpm db:backup).
  *
- * Ejecuta pg_dump utilizando la imagen oficial postgres:16-alpine (misma versión mayor que Neon),
- * leyendo la cadena de conexión directa desde la variable de entorno BACKUP_DATABASE_URL.
+ * Ejecuta pg_dump utilizando la imagen oficial postgres:18-alpine por defecto (configurable
+ * con BACKUP_PG_VERSION), leyendo la cadena de conexión directa desde BACKUP_DATABASE_URL.
  *
  * Reglas de seguridad:
  * - La URL y credenciales NUNCA se leen de archivos del repositorio ni se imprimen en consola/logs.
@@ -18,7 +18,16 @@ const os = require('os');
 const zlib = require('zlib');
 const { spawn } = require('child_process');
 
-const POSTGRES_IMAGE = 'postgres:16-alpine';
+const DEFAULT_PG_VERSION = '18';
+const BACKUP_PG_VERSION = process.env.BACKUP_PG_VERSION || DEFAULT_PG_VERSION;
+const POSTGRES_IMAGE = `postgres:${BACKUP_PG_VERSION}-alpine`;
+
+/**
+ * Retorna el tag de imagen de PostgreSQL según la versión solicitada o por defecto.
+ */
+function getPostgresImage(version = process.env.BACKUP_PG_VERSION || DEFAULT_PG_VERSION) {
+  return `postgres:${version}-alpine`;
+}
 
 /**
  * Sanitiza cualquier URL de base de datos para registrar diagnósticos seguros
@@ -93,10 +102,13 @@ function validateBackupEnvironment(env = process.env) {
     );
   }
 
-  if (url.includes('pgbouncer=true') || url.includes(':6543')) {
-    console.warn(
-      'ADVERTENCIA: BACKUP_DATABASE_URL parece apuntar al pooler PgBouncer (puerto 6543).\n' +
-      'pg_dump requiere la conexión directa (DIRECT_URL, puerto 5432) para acceder a los catálogos del sistema.\n'
+  if (url.includes('-pooler') || url.includes('pgbouncer=true') || url.includes(':6543')) {
+    const maskedUrl = sanitizeDatabaseUrl(url);
+    throw new Error(
+      'BACKUP_DATABASE_URL apunta a un pooler de conexiones (PgBouncer):\n' +
+      `  URL detectada: ${maskedUrl}\n` +
+      'pg_dump requiere obligatoriamente una conexión directa (DIRECT_URL) sin "-pooler" y sin "pgbouncer=true" ' +
+      'para acceder a los catálogos del sistema de PostgreSQL.'
     );
   }
 
@@ -113,6 +125,8 @@ async function runBackup(options = {}) {
   const dockerUrl = resolveDockerHost(rawUrl);
   const now = options.now || new Date();
   const filename = options.filename || generateBackupFilename(now);
+  const pgVersion = options.pgVersion || env.BACKUP_PG_VERSION || DEFAULT_PG_VERSION;
+  const postgresImage = options.postgresImage || getPostgresImage(pgVersion);
 
   fs.mkdirSync(targetDir, { recursive: true });
   const targetPath = path.join(targetDir, filename);
@@ -121,7 +135,7 @@ async function runBackup(options = {}) {
   console.log('============================================================');
   console.log('VetApp - Copia de Seguridad de Base de Datos Local');
   console.log('============================================================');
-  console.log(`- Motor: pg_dump vía contenedor ${POSTGRES_IMAGE}`);
+  console.log(`- Motor: pg_dump vía contenedor ${postgresImage}`);
   console.log(`- Destino: ${targetPath}`);
   console.log(`- Destino seguro: FUERA del repositorio`);
   console.log(`- Conexión: ${safeSanitizedUrl}`);
@@ -139,7 +153,7 @@ async function runBackup(options = {}) {
     '-i',
     '-e',
     `DB_URL=${dockerUrl}`,
-    POSTGRES_IMAGE,
+    postgresImage,
     'sh',
     '-c',
     'pg_dump "$DB_URL" --clean --if-exists --no-owner --no-privileges',
@@ -220,7 +234,10 @@ if (require.main === module) {
 }
 
 module.exports = {
+  DEFAULT_PG_VERSION,
+  BACKUP_PG_VERSION,
   POSTGRES_IMAGE,
+  getPostgresImage,
   sanitizeDatabaseUrl,
   getBackupDirectory,
   generateBackupFilename,
