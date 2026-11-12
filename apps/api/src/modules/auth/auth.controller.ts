@@ -7,6 +7,7 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { Role } from '@prisma/client';
 import { AuthService, LoginResponse, LogoutResponse } from './auth.service';
 import { CurrentClinicId, CurrentUser, CurrentUserId } from './decorators/current-user.decorator';
@@ -28,6 +29,12 @@ export class AuthController {
    */
   @Post('login')
   @HttpCode(HttpStatus.OK)
+  @Throttle({
+    default: {
+      limit: () => Number(process.env.LOGIN_THROTTLE_LIMIT) || 10,
+      ttl: () => Number(process.env.LOGIN_THROTTLE_TTL_MS) || 60000,
+    },
+  })
   async login(@Body() loginDto: LoginDto): Promise<LoginResponse> {
     return this.authService.login(loginDto);
   }

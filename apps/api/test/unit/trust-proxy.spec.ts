@@ -1,11 +1,21 @@
 import 'reflect-metadata';
 import { describe, it } from 'node:test';
 import * as assert from 'node:assert';
+import { Reflector } from '@nestjs/core';
 import { ExpressAdapter } from '@nestjs/platform-express';
+import { ThrottlerStorage } from '@nestjs/throttler';
 import * as request from 'supertest';
 import { UserThrottlerGuard } from '../../src/common/guards/user-throttler.guard';
 
 describe('Trust Proxy & Rate Limiting IP Tracking (Render Reverse Proxy)', () => {
+  const dummyStorage: ThrottlerStorage = {
+    increment: async () => ({
+      totalHits: 0,
+      timeToExpire: 0,
+      isBlocked: false,
+      timeToBlockExpire: 0,
+    }),
+  };
   it('cuando TRUST_PROXY=true está configurado en Express, req.ip extrae la IP real de X-Forwarded-For', async () => {
     const adapter = new ExpressAdapter();
     const app = adapter.getInstance();
@@ -59,12 +69,16 @@ describe('Trust Proxy & Rate Limiting IP Tracking (Render Reverse Proxy)', () =>
 
   it('UserThrottlerGuard debe resolver la IP del cliente utilizando getTracker', async () => {
     class TestUserThrottlerGuard extends UserThrottlerGuard {
-      public testGetTracker(req: any) {
+      public testGetTracker(req: Record<string, unknown>) {
         return this.getTracker(req);
       }
     }
 
-    const guard = new TestUserThrottlerGuard({} as any, {} as any, {} as any);
+    const guard = new TestUserThrottlerGuard(
+      { throttlers: [{ limit: 10, ttl: 60000 }] },
+      dummyStorage,
+      new Reflector(),
+    );
 
     const clientIp = '192.0.2.123';
     const mockReq = {
@@ -80,11 +94,15 @@ describe('Trust Proxy & Rate Limiting IP Tracking (Render Reverse Proxy)', () =>
 
   it('con TRUST_PROXY=1 una cabecera X-Forwarded-For falsificada por el cliente NO cambia la IP que usa el rate limit', async () => {
     class TestUserThrottlerGuard extends UserThrottlerGuard {
-      public testGetTracker(req: any) {
+      public testGetTracker(req: Record<string, unknown>) {
         return this.getTracker(req);
       }
     }
-    const guard = new TestUserThrottlerGuard({} as any, {} as any, {} as any);
+    const guard = new TestUserThrottlerGuard(
+      { throttlers: [{ limit: 10, ttl: 60000 }] },
+      dummyStorage,
+      new Reflector(),
+    );
 
     const adapter = new ExpressAdapter();
     const app = adapter.getInstance();

@@ -46,16 +46,18 @@ async function bootstrap(): Promise<void> {
   const port = configService.get<number>('PORT', 3000);
   const nodeEnv = configService.get<string>('NODE_ENV', 'development');
 
-  // Configuración de trust proxy según variable de entorno (para proxies inversos como Render)
+  // Configuración de trust proxy según variable de entorno (para proxies inversos como Render, por defecto 1 salto)
   const expressApp = app.getHttpAdapter().getInstance();
-  const trustProxyEnv = configService.get<string>('TRUST_PROXY', 'false');
+  const trustProxyEnv = configService.get<string>('TRUST_PROXY', '1');
   if (trustProxyEnv === 'true') {
     expressApp.set('trust proxy', true);
-  } else if (trustProxyEnv !== 'false' && trustProxyEnv !== '') {
+  } else if (trustProxyEnv === 'false' || trustProxyEnv === '0') {
+    expressApp.set('trust proxy', false);
+  } else if (trustProxyEnv !== '') {
     const hops = Number(trustProxyEnv);
     expressApp.set('trust proxy', isNaN(hops) ? trustProxyEnv : hops);
   } else {
-    expressApp.set('trust proxy', false);
+    expressApp.set('trust proxy', 1);
   }
 
   // Restricción de CORS según entorno y variable de configuración

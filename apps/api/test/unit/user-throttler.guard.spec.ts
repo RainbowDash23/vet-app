@@ -1,6 +1,9 @@
 import { describe, it, before, after } from 'node:test';
 import * as assert from 'node:assert';
+import { ExecutionContext } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
+import { ThrottlerLimitDetail, ThrottlerStorage } from '@nestjs/throttler';
 import { UserThrottlerGuard } from '../../src/common/guards/user-throttler.guard';
 
 describe('UserThrottlerGuard: Rate limiting por usuario autenticado con JWT verificado', () => {
@@ -16,14 +19,31 @@ describe('UserThrottlerGuard: Rate limiting por usuario autenticado con JWT veri
     process.env.JWT_SECRET = originalSecret;
   });
 
-  // Creamos una subclase para exponer el método protegido getTracker en tests unitarios
+  const dummyStorage: ThrottlerStorage = {
+    increment: async () => ({
+      totalHits: 0,
+      timeToExpire: 0,
+      isBlocked: false,
+      timeToBlockExpire: 0,
+    }),
+  };
+
+  // Creamos una subclase para exponer los métodos protegidos en tests unitarios
   class TestUserThrottlerGuard extends UserThrottlerGuard {
-    public testGetTracker(req: any) {
+    public testGetTracker(req: Record<string, unknown>) {
       return this.getTracker(req);
+    }
+
+    public testThrowException(context: ExecutionContext, detail: ThrottlerLimitDetail) {
+      return this.throwThrottlingException(context, detail);
     }
   }
 
-  const guard = new TestUserThrottlerGuard({} as any, {} as any, {} as any);
+  const guard = new TestUserThrottlerGuard(
+    { throttlers: [{ limit: 10, ttl: 60000 }] },
+    dummyStorage,
+    new Reflector(),
+  );
 
   it('debe retornar user-<userId> si req.user ya está presente y autenticado', async () => {
     const req = {
@@ -74,5 +94,51 @@ describe('UserThrottlerGuard: Rate limiting por usuario autenticado con JWT veri
     };
     const tracker = await guard.testGetTracker(req);
     assert.strictEqual(tracker, '10.0.0.1');
+  });
+
+  it('throwThrottlingException debe incluir cabecera Retry-After y mensaje en español según el endpoint', async () => {
+    let capturedHeaderName = '';
+    let capturedHeaderVal: string | number = 0;
+
+    const mockResponse = {
+      header: (name: string, value: string | number) => {
+        capturedHeaderName = name;
+        capturedHeaderVal = value;
+      },
+    };
+
+    const mockLoginContext = {
+      switchToHttp: () => ({
+        getRequest: () => ({}),
+        getResponse: () => mockResponse,
+      }),
+      getHandler: () => ({ name: 'login' }),
+      getClass: () => ({ name: 'AuthController' }),
+    } as unknown as ExecutionContext;
+
+    const detail: ThrottlerLimitDetail = {
+      limit: 10,
+      ttl: 60000,
+      key: 'key-1',
+      tracker: '198.51.100.1',
+      totalHits: 11,
+      timeToExpire: 45,
+      isBlocked: true,
+      timeToBlockExpire: 45,
+    };
+
+    await assert.rejects(
+      async () => {
+        await guard.testThrowException(mockLoginContext, detail);
+      },
+      (err: Error) => {
+        assert.match(err.message, /demasiados intentos de inicio de sesión/i);
+        assert.match(err.message, /45 segundos/);
+        return true;
+      },
+    );
+
+    assert.strictEqual(capturedHeaderName, 'Retry-After');
+    assert.strictEqual(capturedHeaderVal, 45);
   });
 });

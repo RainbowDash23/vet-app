@@ -79,6 +79,16 @@ export class EnvironmentVariables {
   @IsOptional()
   @IsNumber()
   @Min(1)
+  LOGIN_THROTTLE_LIMIT?: number = 10;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  LOGIN_THROTTLE_TTL_MS?: number = 60000;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
   TAG_RESOLVE_LIMIT_USER?: number = 30;
 
   @IsOptional()

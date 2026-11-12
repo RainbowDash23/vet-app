@@ -918,7 +918,17 @@ export async function createTestApp(customDb?: InMemoryDb): Promise<{
   const app = moduleFixture.createNestApplication();
 
   const expressApp = app.getHttpAdapter().getInstance();
-  expressApp.set('trust proxy', true);
+  const trustProxyEnv = process.env.TRUST_PROXY || '1';
+  if (trustProxyEnv === 'true') {
+    expressApp.set('trust proxy', true);
+  } else if (trustProxyEnv === 'false' || trustProxyEnv === '0') {
+    expressApp.set('trust proxy', false);
+  } else if (trustProxyEnv !== '') {
+    const hops = Number(trustProxyEnv);
+    expressApp.set('trust proxy', isNaN(hops) ? trustProxyEnv : hops);
+  } else {
+    expressApp.set('trust proxy', 1);
+  }
 
   app.useGlobalPipes(
     new ValidationPipe({
