@@ -54,9 +54,9 @@
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  padding: var(--space-1) var(--space-3);
-  background-color: rgba(16, 185, 129, 0.1);
-  border: 1px solid rgba(16, 185, 129, 0.3);
+  padding: 3px var(--space-3);
+  background-color: var(--color-success-light);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-full);
   color: var(--color-success);
   font-size: var(--font-size-xs);
@@ -64,8 +64,8 @@
 }
 
 .latencyDot {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background-color: var(--color-success);
 }
@@ -79,11 +79,12 @@
 .headerCard {
   background-color: var(--color-bg-card);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-xl);
   padding: var(--space-6);
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
+  box-shadow: var(--shadow-sm);
 }
 
 .headerMain {
@@ -101,15 +102,16 @@
 }
 
 .speciesAvatar {
-  width: 56px;
-  height: 56px;
-  border-radius: var(--radius-lg);
-  background-color: var(--color-primary-light);
-  color: var(--color-primary);
+  width: 52px;
+  height: 52px;
+  border-radius: var(--radius-full);
+  background-color: var(--color-bg-input);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-primary);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: var(--font-size-2xl);
+  font-size: var(--font-size-xl);
 }
 
 .petName {
@@ -117,6 +119,7 @@
   font-size: var(--font-size-2xl);
   font-weight: var(--font-weight-bold);
   color: var(--color-text-primary);
+  letter-spacing: -0.02em;
 }
 
 .petSub {
@@ -136,9 +139,9 @@
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
-  padding: var(--space-1) var(--space-3);
+  padding: 3px var(--space-3);
   background-color: var(--color-bg-input);
-  border: 1px solid var(--color-border-subtle);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-full);
   font-size: var(--font-size-xs);
   font-family: var(--font-family-mono);
@@ -149,9 +152,9 @@
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
-  padding: var(--space-1) var(--space-3);
-  background-color: rgba(20, 184, 166, 0.15);
-  border: 1px solid var(--color-primary);
+  padding: 3px var(--space-3);
+  background-color: var(--color-primary-light);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-full);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-semibold);
@@ -162,9 +165,9 @@
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
-  padding: var(--space-1) var(--space-3);
-  background-color: rgba(245, 158, 11, 0.15);
-  border: 1px solid var(--color-warning);
+  padding: 3px var(--space-3);
+  background-color: rgba(245, 158, 11, 0.1);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-full);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-semibold);

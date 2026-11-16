@@ -1,68 +1,179 @@
-:root {
+/* ==========================================================================
+   Sistema de Diseño VetApp - Tokens Globales Duales (Modo Claro & Oscuro)
+   Estándar Clínico B2B de Alta Fidelidad (RNF-3: Cero Tailwind / Cero shadcn)
+   ========================================================================== */
+
+:root,
+[data-theme="dark"] {
   color-scheme: dark;
-  /* ==========================================================================
-     Sistema de Diseño VetApp - Tokens de Diseño Globales Sobrios (RNF-3)
-     Dirección estética: Utilitario clínico, sobrio, densificado, sin artificios.
-     ========================================================================== */
 
-  /* --- Colores de Fondo y Superficie Neutros --- */
-  --color-bg-app: #0c0e12;
-  --color-bg-sidebar: #11141a;
-  --color-bg-card: #151922;
-  --color-bg-input: #1a1f2c;
-  --color-bg-hover: #1f2535;
-  --color-bg-active: #252c3f;
-  --color-bg-overlay: rgba(12, 14, 18, 0.82);
+  /* --- Superficies y Fondos (Obsidian & Graphite) --- */
+  --color-bg-app: #09090b;
+  --color-bg-sidebar: #0d0f14;
+  --color-bg-card: #12151d;
+  --color-bg-input: #161a24;
+  --color-bg-hover: #1c212e;
+  --color-bg-active: #242b3b;
+  --color-bg-secondary: #161a24;
+  --color-bg-subtle: #1c212e;
+  --color-bg-muted: #161a24;
+  --color-bg-overlay: rgba(9, 9, 11, 0.82);
 
-  /* --- Bordes Nítidos de 1px --- */
-  --color-border: #27272a;
-  --color-border-subtle: #1f1f23;
-  --color-border-focus: #0ea5e9;
+  /* --- Bordes Nítidos de 1px (Hairline) --- */
+  --color-border: #1e2330;
+  --color-border-subtle: #171b26;
+  --color-border-focus: #38bdf8;
   --color-border-error: #ef4444;
 
   /* --- Tipografía y Contenido --- */
-  --color-text-primary: #f4f4f5;
-  --color-text-secondary: #a1a1aa;
-  --color-text-muted: #71717a;
-  --color-text-disabled: #52525b;
+  --color-text-primary: #f8fafc;
+  --color-text-secondary: #94a3b8;
+  --color-text-muted: #64748b;
+  --color-text-disabled: #475569;
   --color-text-inverse: #09090b;
 
-  /* --- Acento Único Clínico (Azul Clínico #0ea5e9, sin gradientes ni morados) --- */
+  /* --- Acento Primario Clínico (Cerúleo Desaturado) --- */
   --color-primary: #0ea5e9;
-  --color-primary-hover: #0284c7;
-  --color-primary-active: #0369a1;
+  --color-primary-hover: #38bdf8;
+  --color-primary-active: #0284c7;
+  --color-primary-dark: #0369a1;
   --color-primary-light: rgba(14, 165, 233, 0.12);
+  --color-primary-subtle: rgba(14, 165, 233, 0.12);
   --color-primary-foreground: #ffffff;
 
-  /* --- Variantes Funcionales Secundarias y Destructivas --- */
-  --color-secondary: #1f2430;
-  --color-secondary-hover: #2a3142;
-  --color-secondary-active: #353e54;
-  --color-secondary-foreground: #f4f4f5;
-  --color-secondary-border: #27272a;
+  /* --- Variantes Funcionales Secundarias --- */
+  --color-secondary: #1a1f2c;
+  --color-secondary-hover: #22293a;
+  --color-secondary-active: #2c344a;
+  --color-secondary-foreground: #f8fafc;
+  --color-secondary-border: #1e2330;
 
+  /* --- Destructivo / Peligro / Errores --- */
   --color-destructive: #ef4444;
   --color-destructive-hover: #dc2626;
   --color-destructive-active: #b91c1c;
   --color-destructive-foreground: #ffffff;
   --color-destructive-light: rgba(239, 68, 68, 0.12);
 
+  --color-danger: #ef4444;
+  --color-danger-dark: #b91c1c;
+  --color-danger-subtle: rgba(239, 68, 68, 0.12);
+  --color-error: #ef4444;
+  --color-error-light: rgba(239, 68, 68, 0.12);
+
   /* --- Estados de Hardware Serial / NFC (RF-34) --- */
   --color-hw-connected: #10b981;
   --color-hw-disconnected: #ef4444;
   --color-hw-reconnecting: #f59e0b;
-  --color-hw-idle: #71717a;
+  --color-hw-idle: #64748b;
 
-  /* --- Estados y Alertas del Sistema --- */
+  /* --- Estados del Sistema --- */
   --color-success: #10b981;
+  --color-success-light: rgba(16, 185, 129, 0.12);
+  --color-success-subtle: rgba(16, 185, 129, 0.12);
   --color-warning: #f59e0b;
-  --color-error: #ef4444;
-  --color-info: #0ea5e9;
+  --color-info: #38bdf8;
 
-  /* --- Espaciado Dimensional Compacto y Proporcional --- */
+  /* --- Sombras Sutiles Modo Oscuro --- */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 2px 4px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 4px 8px rgba(0, 0, 0, 0.55);
+  --shadow-xl: 0 8px 16px rgba(0, 0, 0, 0.65);
+  --shadow-dialog: 0 12px 32px rgba(0, 0, 0, 0.75);
+
+  --focus-ring-color: #38bdf8;
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+
+  /* --- Superficies y Fondos (Clínico Slate & Pure White) --- */
+  --color-bg-app: #f8fafc;
+  --color-bg-sidebar: #ffffff;
+  --color-bg-card: #ffffff;
+  --color-bg-input: #f1f5f9;
+  --color-bg-hover: #f1f5f9;
+  --color-bg-active: #e2e8f0;
+  --color-bg-secondary: #f1f5f9;
+  --color-bg-subtle: #f8fafc;
+  --color-bg-muted: #f1f5f9;
+  --color-bg-overlay: rgba(15, 23, 42, 0.45);
+
+  /* --- Bordes Nítidos de 1px --- */
+  --color-border: #e2e8f0;
+  --color-border-subtle: #f1f5f9;
+  --color-border-focus: #0284c7;
+  --color-border-error: #dc2626;
+
+  /* --- Tipografía y Contenido --- */
+  --color-text-primary: #0f172a;
+  --color-text-secondary: #475569;
+  --color-text-muted: #64748b;
+  --color-text-disabled: #94a3b8;
+  --color-text-inverse: #ffffff;
+
+  /* --- Acento Primario Clínico --- */
+  --color-primary: #0284c7;
+  --color-primary-hover: #0369a1;
+  --color-primary-active: #075985;
+  --color-primary-dark: #075985;
+  --color-primary-light: rgba(2, 132, 199, 0.08);
+  --color-primary-subtle: rgba(2, 132, 199, 0.08);
+  --color-primary-foreground: #ffffff;
+
+  /* --- Variantes Funcionales Secundarias --- */
+  --color-secondary: #f1f5f9;
+  --color-secondary-hover: #e2e8f0;
+  --color-secondary-active: #cbd5e1;
+  --color-secondary-foreground: #0f172a;
+  --color-secondary-border: #e2e8f0;
+
+  /* --- Destructivo / Peligro / Errores --- */
+  --color-destructive: #dc2626;
+  --color-destructive-hover: #b91c1c;
+  --color-destructive-active: #991b1b;
+  --color-destructive-foreground: #ffffff;
+  --color-destructive-light: rgba(220, 38, 38, 0.08);
+
+  --color-danger: #dc2626;
+  --color-danger-dark: #991b1b;
+  --color-danger-subtle: rgba(220, 38, 38, 0.08);
+  --color-error: #dc2626;
+  --color-error-light: rgba(220, 38, 38, 0.08);
+
+  /* --- Estados de Hardware Serial / NFC (RF-34) --- */
+  --color-hw-connected: #16a34a;
+  --color-hw-disconnected: #dc2626;
+  --color-hw-reconnecting: #d97706;
+  --color-hw-idle: #94a3b8;
+
+  /* --- Estados del Sistema --- */
+  --color-success: #16a34a;
+  --color-success-light: rgba(22, 163, 74, 0.08);
+  --color-success-subtle: rgba(22, 163, 74, 0.08);
+  --color-warning: #d97706;
+  --color-info: #0284c7;
+
+  /* --- Sombras Modo Claro --- */
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-md: 0 2px 4px -1px rgba(15, 23, 42, 0.06), 0 1px 2px -1px rgba(15, 23, 42, 0.04);
+  --shadow-lg: 0 4px 6px -1px rgba(15, 23, 42, 0.08), 0 2px 4px -1px rgba(15, 23, 42, 0.04);
+  --shadow-xl: 0 10px 15px -3px rgba(15, 23, 42, 0.08), 0 4px 6px -2px rgba(15, 23, 42, 0.04);
+  --shadow-dialog: 0 12px 28px rgba(15, 23, 42, 0.16);
+
+  --focus-ring-color: #0284c7;
+}
+
+/* ==========================================================================
+   Tokens Comunes de Dimensiones, Tipografía y Movimiento
+   ========================================================================== */
+:root {
+  /* --- Espaciado Dimensional Proporcional --- */
   --space-0: 0px;
   --space-1: 4px;
+  --space-1-5: 6px;
   --space-2: 8px;
+  --space-2-5: 10px;
   --space-3: 12px;
   --space-4: 16px;
   --space-5: 20px;
@@ -72,17 +183,19 @@
   --space-12: 48px;
   --space-16: 64px;
 
-  /* --- Tipografía de Sistema Estricta --- */
+  /* --- Tipografía de Sistema --- */
   --font-family-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   --font-family-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --font-mono: var(--font-family-mono);
 
-  --font-size-xs: 0.75rem;    /* 12px */
-  --font-size-sm: 0.875rem;   /* 14px */
-  --font-size-base: 1rem;     /* 16px */
-  --font-size-lg: 1.125rem;   /* 18px */
-  --font-size-xl: 1.25rem;    /* 20px */
-  --font-size-2xl: 1.5rem;    /* 24px */
-  --font-size-3xl: 1.875rem;  /* 30px */
+  --font-size-xs: 0.75rem;     /* 12px */
+  --font-size-sm: 0.875rem;    /* 14px */
+  --font-size-md: 0.9375rem;   /* 15px */
+  --font-size-base: 1rem;      /* 16px */
+  --font-size-lg: 1.125rem;    /* 18px */
+  --font-size-xl: 1.25rem;     /* 20px */
+  --font-size-2xl: 1.5rem;     /* 24px */
+  --font-size-3xl: 1.875rem;   /* 30px */
 
   --font-weight-normal: 400;
   --font-weight-medium: 500;
@@ -94,32 +207,25 @@
   --line-height-normal: 1.5;
   --line-height-relaxed: 1.75;
 
-  /* --- Bordes Redondeados Pequeños (2px a 6px, sin píldoras gigantes) --- */
-  --radius-xs: 2px;
-  --radius-sm: 3px;
-  --radius-md: 4px;
-  --radius-lg: 6px;
-  --radius-xl: 6px;
-  --radius-full: 6px;
-
-  /* --- Sombras Sutiles (0 1px 2px) o Sin Sombras --- */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.25);
-  --shadow-md: 0 1px 3px rgba(0, 0, 0, 0.35);
-  --shadow-lg: 0 2px 4px rgba(0, 0, 0, 0.4);
-  --shadow-xl: 0 4px 6px rgba(0, 0, 0, 0.45);
-  --shadow-dialog: 0 4px 12px rgba(0, 0, 0, 0.6);
+  /* --- Radios de Borde Refinados --- */
+  --radius-xs: 3px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+  --radius-full: 9999px;
 
   /* --- Transiciones --- */
-  --transition-fast: 120ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-fast: 140ms cubic-bezier(0.4, 0, 0.2, 1);
   --transition-normal: 200ms cubic-bezier(0.4, 0, 0.2, 1);
   --transition-slow: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+  --duration-fast: var(--transition-fast);
 
-  /* --- Foco Accesible (WAI-ARIA Focus Visible) --- */
-  --focus-ring-color: #0ea5e9;
+  /* --- Foco Accesible --- */
   --focus-ring-offset: 2px;
   --focus-ring-width: 2px;
 
-  /* --- Capas de Profundidad (Z-Index) --- */
+  /* --- Z-Index --- */
   --z-dropdown: 1000;
   --z-sticky: 1020;
   --z-modal-backdrop: 1040;

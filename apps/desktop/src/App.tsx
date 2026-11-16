@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import type { ResolveTagSuccessDto } from '@vet-app/shared-types';
 import { MainLayout, ScreenId } from './components/layout';
 import { AuthProvider, useAuth } from './context/auth.context';
+import { ThemeProvider } from './context/theme-context';
 import { LoginScreen } from './screens/login-screen';
 import loginStyles from './screens/login-screen.module.css';
 import { PetListScreen } from './screens/PetListScreen';
@@ -423,8 +424,10 @@ export const AppContent: React.FC<AppContentProps> = ({
 
 export const App: React.FC = () => {
   return (
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
+    </ThemeProvider>
   );
 };

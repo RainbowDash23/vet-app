@@ -38,26 +38,23 @@
 }
 
 .dot {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: var(--radius-full);
   flex-shrink: 0;
-  transition: background-color var(--transition-fast), box-shadow var(--transition-fast);
+  transition: background-color var(--transition-fast);
 }
 
 .dotConnected {
   background-color: var(--color-hw-connected);
-  box-shadow: 0 0 8px rgba(16, 185, 129, 0.6);
 }
 
 .dotDisconnected {
   background-color: var(--color-hw-disconnected);
-  box-shadow: 0 0 6px rgba(239, 68, 68, 0.5);
 }
 
 .dotReconnecting {
   background-color: var(--color-hw-reconnecting);
-  box-shadow: 0 0 8px rgba(245, 158, 11, 0.6);
   animation: pulseDot 1.5s infinite ease-in-out;
 }
 

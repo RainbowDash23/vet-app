@@ -23,31 +23,41 @@
   padding: 0 var(--space-2);
 }
 
+.brandLogo {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-full);
+  object-fit: cover;
+  flex-shrink: 0;
+  display: block;
+}
+
 .brandIcon {
-  width: 36px;
-  height: 36px;
-  background: linear-gradient(135deg, var(--color-primary), #0284c7);
-  border-radius: var(--radius-md);
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-full);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-bold);
-  color: var(--color-primary-foreground);
-  box-shadow: 0 2px 8px rgba(20, 184, 166, 0.4);
+  color: var(--color-primary);
+  background-color: var(--color-primary-light);
 }
 
 .brandName {
-  font-size: var(--font-size-lg);
+  font-size: var(--font-size-base);
   font-weight: var(--font-weight-bold);
   color: var(--color-text-primary);
   letter-spacing: -0.02em;
 }
 
 .brandTag {
-  font-size: var(--font-size-xs);
-  color: var(--color-primary);
-  background: var(--color-primary-light);
+  font-size: 10px;
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  background: var(--color-bg-input);
+  border: 1px solid var(--color-border-subtle);
   padding: 2px 6px;
   border-radius: var(--radius-sm);
   margin-left: auto;
@@ -74,7 +84,7 @@
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  padding: var(--space-3) var(--space-4);
+  padding: 8px 12px;
   border-radius: var(--radius-md);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
@@ -99,10 +109,14 @@
 }
 
 .navItemActive {
-  background-color: var(--color-primary-light);
-  color: var(--color-primary);
+  background-color: var(--color-bg-active);
+  color: var(--color-text-primary);
   font-weight: var(--font-weight-semibold);
-  border-left: 3px solid var(--color-primary);
+  border-color: var(--color-border);
+}
+
+.navItemActive .navIcon {
+  color: var(--color-text-primary);
 }
 
 .navIcon {

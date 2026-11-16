@@ -90,6 +90,13 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({
   return (
     <div className={styles.container}>
       <div className={styles.header}>
+        <img
+          src="/app-logo-128.png"
+          alt="VetApp Logo"
+          className={styles.loginLogo}
+          width={64}
+          height={64}
+        />
         <h1 className={styles.title}>Iniciar Sesión</h1>
         <p className={styles.subtitle}>
           Acceso para personal de la clínica

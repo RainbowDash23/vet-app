@@ -25,6 +25,14 @@
   text-align: center;
 }
 
+.loginLogo {
+  width: 64px;
+  height: 64px;
+  border-radius: var(--radius-full);
+  margin: 0 auto var(--space-4) auto;
+  display: block;
+}
+
 .title {
   font-size: var(--font-size-2xl);
   font-weight: var(--font-weight-bold);

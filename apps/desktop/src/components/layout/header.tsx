@@ -1,7 +1,8 @@
 import React from 'react';
 import type { Role, HardwareStatus } from '@vet-app/shared-types';
 import { HardwareStatusIndicator } from './hardware-status-indicator';
-import { ClinicIcon, LogoutIcon, SearchIcon } from '../ui/icons';
+import { ClinicIcon, LogoutIcon, SearchIcon, SunIcon, MoonIcon } from '../ui/icons';
+import { useTheme } from '../../context/theme-context';
 import styles from './header.module.css';
 
 export interface HeaderProps {
@@ -23,6 +24,8 @@ export const Header: React.FC<HeaderProps> = ({
   className,
   onOpenQuickSearch,
 }) => {
+  const { theme, toggleTheme } = useTheme();
+
   const getRoleBadgeClass = (r?: Role | 'ADMIN' | 'VET' | 'RECEPTION') => {
     switch (r) {
       case 'ADMIN':
@@ -62,6 +65,22 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       <div className={styles.rightSection}>
+        {/* Conmutador de Tema Claro / Oscuro (RNF-3) */}
+        <button
+          type="button"
+          className={styles.themeToggleBtn}
+          onClick={toggleTheme}
+          data-testid="header-theme-toggle-btn"
+          aria-label={theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+          title={theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+        >
+          {theme === 'dark' ? (
+            <SunIcon size={16} aria-hidden="true" />
+          ) : (
+            <MoonIcon size={16} aria-hidden="true" />
+          )}
+        </button>
+
         {/* Indicador de estado de Hardware Serial / Lector USB */}
         <HardwareStatusIndicator status={hardwareStatus} />
 

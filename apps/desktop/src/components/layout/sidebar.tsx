@@ -269,7 +269,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
     <aside className={rootClass} role="complementary" aria-label="Menú principal de navegación">
       <div>
         <div className={styles.brand}>
-          <PetIcon className={styles.brandIcon} aria-hidden="true" size={20} />
+          <img
+            src="/app-logo-64.png"
+            alt="VetApp Logo"
+            className={styles.brandLogo}
+            width={32}
+            height={32}
+          />
           <span className={styles.brandName}>VetApp</span>
           <span className={styles.brandTag}>Desktop</span>
         </div>

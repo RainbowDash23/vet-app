@@ -14,11 +14,11 @@ dist-electron/
 **/dist-electron/
 apps/desktop/dist-electron/
 
-# Local-only documentation, specifications and firmware
+# Local-only documentation, specifications, firmware and references
 docs/
 specs/
 firmware/
-
+references/
 # Environment & credentials
 .env*
 *.pem

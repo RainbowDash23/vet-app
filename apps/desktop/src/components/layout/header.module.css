@@ -45,6 +45,31 @@
   gap: var(--space-4);
 }
 
+.themeToggleBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md);
+  background-color: var(--color-bg-input);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.themeToggleBtn:hover {
+  background-color: var(--color-bg-hover);
+  color: var(--color-text-primary);
+  border-color: var(--color-border-focus);
+}
+
+.themeToggleBtn:focus-visible {
+  outline: 2px solid var(--color-border-focus);
+  outline-offset: 2px;
+}
+
 .roleBadge {
   display: inline-flex;
   align-items: center;
@@ -57,21 +82,21 @@
 }
 
 .roleBadgeAdmin {
-  background-color: rgba(168, 85, 247, 0.15);
-  color: #c084fc;
-  border: 1px solid rgba(168, 85, 247, 0.35);
+  background-color: var(--color-bg-input);
+  color: #a855f7;
+  border: 1px solid var(--color-border);
 }
 
 .roleBadgeVet {
   background-color: var(--color-primary-light);
   color: var(--color-primary);
-  border: 1px solid rgba(20, 184, 166, 0.35);
+  border: 1px solid var(--color-border);
 }
 
 .roleBadgeReception {
-  background-color: rgba(56, 189, 248, 0.15);
+  background-color: var(--color-bg-input);
   color: var(--color-info);
-  border: 1px solid rgba(56, 189, 248, 0.35);
+  border: 1px solid var(--color-border);
 }
 
 .userSection {
