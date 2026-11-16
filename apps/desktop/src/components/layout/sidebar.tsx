@@ -77,7 +77,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   className,
   onOpenWhatsNew,
 }) => {
-  const [appVersion, setAppVersion] = useState<string>('0.1.1');
+  const [appVersion, setAppVersion] = useState<string>('0.2.1');
   const [recentScan, setRecentScan] = useState<{ uid: string; time: string } | null>(null);
   const scanTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMountedRef = useRef(true);

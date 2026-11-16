@@ -71,10 +71,10 @@ export const AppContent: React.FC<AppContentProps> = ({
     message: '',
   });
 
-  // Estados para paleta de búsqueda rápida (Ctrl+K) y modal de novedades v0.1.1
+  // Estados para paleta de búsqueda rápida (Ctrl+K) y modal de novedades
   const [isQuickSearchOpen, setIsQuickSearchOpen] = useState<boolean>(false);
   const [isWhatsNewOpen, setIsWhatsNewOpen] = useState<boolean>(false);
-  const [whatsNewVersion, setWhatsNewVersion] = useState<string>('0.1.1');
+  const [whatsNewVersion, setWhatsNewVersion] = useState<string>('0.2.1');
 
   const isMountedRef = useRef(true);
   useEffect(() => {

@@ -6,6 +6,17 @@ export interface ReleaseNote {
 }
 
 export const RELEASE_NOTES: Record<string, ReleaseNote> = {
+  '0.2.1': {
+    version: '0.2.1',
+    title: 'Novedades de la versión 0.2.1',
+    date: 'Noviembre 2026',
+    highlights: [
+      'Rediseño visual clínico minimalista de alta gama inspirado en CarePath AI, MiseFlow y Strawhat.',
+      'Sistema dual de temas: Modo Oscuro Obsidian y Modo Claro Clínico con conmutador instantáneo en cabecera.',
+      'Integración del logo oficial de la marca en la barra lateral superior y pantalla de acceso.',
+      'Calibración cromática sobria con resaltado de navegación neutro y chips médicos desaturados.',
+    ],
+  },
   '0.2.0': {
     version: '0.2.0',
     title: 'Novedades de la versión 0.2.0',
